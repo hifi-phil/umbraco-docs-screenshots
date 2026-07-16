@@ -23,11 +23,15 @@ not batch.
 
 | | |
 |---|---|
-| Docs repo | `/Users/philw/Projects/UmbracoDocs` (fork `hifi-phil`, upstream `umbraco/UmbracoDocs`, base `main`) |
-| Capture harness | this repo — `/Users/philw/Projects/umbraco-docs-screenshots` (Playwright) |
-| v17 instance | `demo/v17` → `https://localhost:44322/umbraco` |
-| v18 instance | `demo/v18` → `https://localhost:44327/umbraco` |
+| Capture harness (`$HARNESS`) | this repo (contains this skill, `demo/`, `tests/`) — resolved in Step 0 |
+| Docs repo (`$DOCS`) | the UmbracoDocs checkout — discovered or asked for in Step 0 |
+| v17 instance | `$HARNESS/demo/v17` → `https://localhost:44322/umbraco` |
+| v18 instance | `$HARNESS/demo/v18` → `https://localhost:44327/umbraco` |
 | Admin login | `admin@admin.com` / `1234567890` (read from env by the helper) |
+
+Paths are **not** hardcoded — the skill is machine-agnostic. `$HARNESS`, `$DOCS`, and `$FORK_OWNER`
+are established in Step 0 and used throughout. Ports come from `demo/*/Properties/launchSettings.json`
+in this repo, so they are stable across machines.
 
 **Scope is `umbraco-cms` only.** The local demo instances are a vanilla CMS, so only CMS backoffice
 screens are reproducible. **Skip everything else — do not treat these as candidates:**
@@ -39,7 +43,47 @@ screens are reproducible. **Skip everything else — do not treat these as candi
   `umbraco-workflow/`, and the other non-CMS areas (`umbraco-forms/`, `umbraco-search/`,
   `umbraco-automate/`, `ai-*`).
 
-Effective candidate scope: **`UmbracoDocs/<version>/umbraco-cms/**` only** (version = `17` or `18`).
+Effective candidate scope: **`$DOCS/<version>/umbraco-cms/**` only** (version = `17` or `18`).
+
+## Step 0 — Locate the repos (machine-agnostic)
+
+Establish the two repo paths and the fork owner before anything else. **Do not hardcode paths.**
+
+```bash
+# Capture harness = the repo that contains this skill (normally your working directory).
+HARNESS="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+# Docs repo: look as a sibling first, then a couple of common roots. A real checkout has a
+# .gitbook.yaml at its root and version folders like 17/ and 18/.
+DOCS=""
+for c in \
+  "$(dirname "$HARNESS")"/UmbracoDocs "$(dirname "$HARNESS")"/umbraco-docs \
+  "$(dirname "$HARNESS")"/docs "$HOME"/Projects/UmbracoDocs "$HOME"/UmbracoDocs; do
+  if [ -f "$c/.gitbook.yaml" ] && [ -d "$c/18" ]; then DOCS="$c"; break; fi
+done
+# Bounded fallback search if still not found.
+if [ -z "$DOCS" ]; then
+  DOCS="$(find "$HOME" -maxdepth 5 -name .gitbook.yaml 2>/dev/null \
+          | while read -r f; do d="$(dirname "$f")"; \
+              git -C "$d" remote -v 2>/dev/null | grep -qi 'UmbracoDocs' && echo "$d" && break; done)"
+fi
+
+echo "HARNESS = $HARNESS"
+echo "DOCS    = ${DOCS:-NOT FOUND}"
+```
+
+- If `$DOCS` is empty, **ask the user for the absolute path to their UmbracoDocs checkout** and use
+  that. Do not guess or proceed without it.
+- Derive the fork owner (head namespace for the PR) from the docs repo's `origin` remote — never
+  assume a username:
+
+```bash
+FORK_OWNER="$(gh repo view "$DOCS" --json owner -q .owner.login 2>/dev/null \
+  || git -C "$DOCS" remote get-url origin | sed -E 's#.*[:/]([^/]+)/[^/]+(\.git)?$#\1#')"
+echo "FORK_OWNER = $FORK_OWNER"
+```
+
+Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
 ## Step 1 — Pick a version and confirm the instance is up
 
@@ -52,7 +96,7 @@ Check the port, start the instance if needed, wait for `Now listening on:`:
 lsof -nP -iTCP:44322 -sTCP:LISTEN   # v17
 lsof -nP -iTCP:44327 -sTCP:LISTEN   # v18
 # if nothing is listening, start it (run in its own terminal / background):
-cd /Users/philw/Projects/umbraco-docs-screenshots/demo && dotnet run --project v18
+cd "$HARNESS/demo" && dotnet run --project v18
 ```
 
 On first boot, transient `SQLite Error 14: unable to open database file` lines are expected — wait
@@ -60,7 +104,7 @@ for `Now listening on:`.
 
 ## Step 2 — Explore the documentation for candidates (one at a time)
 
-This is the core of the skill. Work through `UmbracoDocs/<version>/umbraco-cms/**` only.
+This is the core of the skill. Work through `$DOCS/<version>/umbraco-cms/**` only.
 
 1. Read the articles (`.md` / `README.md`) and look at the backoffice screenshots they reference.
    Images live in flat `.gitbook/assets/` folders (or legacy `images/` folders) beside the content.
@@ -83,7 +127,7 @@ This is the core of the skill. Work through `UmbracoDocs/<version>/umbraco-cms/*
 Find where the image is used and what screen/state it shows, so you know where to navigate:
 
 ```bash
-cd /Users/philw/Projects/UmbracoDocs
+cd "$DOCS"
 grep -rn "<image-filename>" --include='*.md' <version>/umbraco-cms/
 ```
 
@@ -110,8 +154,8 @@ config block, and drive the running instance to the **exact** screen the origina
 capturing.
 
 ```bash
-cp /Users/philw/Projects/umbraco-docs-screenshots/.claude/skills/update-docs-screenshots/assets/capture-template.spec.ts \
-   /Users/philw/Projects/umbraco-docs-screenshots/tests/capture-<name>.spec.ts
+cp "$HARNESS/.claude/skills/update-docs-screenshots/assets/capture-template.spec.ts" \
+   "$HARNESS/tests/capture-<name>.spec.ts"
 ```
 
 Edit the config block at the top of the spec (this is the "make dimensions easy to change" knob):
@@ -134,7 +178,7 @@ if the shot needs specific data, then screenshots to `OUTPUT`.
 Run it (pass `URL` explicitly — see Gotchas):
 
 ```bash
-cd /Users/philw/Projects/umbraco-docs-screenshots
+cd "$HARNESS"
 URL=https://localhost:44327 npx playwright test tests/capture-<name>.spec.ts --project=chromium
 ```
 
@@ -160,14 +204,14 @@ In the **docs repo**, on a feature branch, replace the asset in place (keep the 
 filename so every `.md` reference keeps working), then push and open a draft PR:
 
 ```bash
-cd /Users/philw/Projects/UmbracoDocs
+cd "$DOCS"
 git checkout main && git pull upstream main
 git checkout -b update-screenshot-<name>
-cp /Users/philw/Projects/umbraco-docs-screenshots/screenshots/<name>.png <version>/umbraco-cms/.../<original-filename>.png
+cp "$HARNESS/screenshots/<name>.png" <version>/umbraco-cms/.../<original-filename>.png
 git add <path-to-asset>
 git commit -m "Update <article> backoffice screenshot for v<version>"
-git push origin update-screenshot-<name>          # origin = the fork (hifi-phil)
-gh pr create --repo umbraco/UmbracoDocs --base main --head hifi-phil:update-screenshot-<name> --draft \
+git push origin update-screenshot-<name>          # origin = the fork ($FORK_OWNER)
+gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --draft \
   --title "Update <article> backoffice screenshot" --body "Refreshed outdated pre-v14 screenshot for v<version>."
 ```
 
