@@ -16,8 +16,14 @@ description: >-
 Repeatable process for replacing outdated Umbraco backoffice screenshots in the docs with fresh
 captures of the current ("Bellissima", v14+) UI.
 
-**Process exactly one image at a time, all the way through the PR, before starting the next.** Do
-not batch.
+**One run of this skill creates exactly one image PR, then stops.** Pick a single candidate, take it
+all the way through to an open PR (Step 7), and **end the run there** — do not find, capture, or PR a
+second image in the same run. Refreshing another screenshot requires invoking the skill again. Never
+batch.
+
+This skill is designed to run **as a scheduled routine**. To avoid overwhelming the docs PR
+reviewers, successive scheduled runs must not stack up open PRs — Step 0.5 bails out early if a
+screenshot PR from a previous run is still open.
 
 ## Repos, instances, scope
 
@@ -85,6 +91,25 @@ echo "FORK_OWNER = $FORK_OWNER"
 
 Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
+## Step 0.5 — Don't stack PRs (scheduled-run guard)
+
+Because this runs on a schedule, check how many screenshot PRs from previous runs are still open
+before doing any work. If the limit is already reached, **stop immediately** — do not explore, capture,
+or open anything. This keeps reviewer load bounded.
+
+```bash
+MAX_OPEN=1   # max concurrent open screenshot PRs from this skill; raise only if reviewers can absorb more
+OPEN=$(gh pr list --repo umbraco/UmbracoDocs --author "$FORK_OWNER" --state open \
+        --json number,headRefName \
+        -q '[.[] | select(.headRefName | startswith("update-screenshot-"))] | length')
+echo "Open screenshot PRs: $OPEN (limit $MAX_OPEN)"
+```
+
+- Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 7 — keep that
+  prefix so this guard keeps working.
+- If `OPEN >= MAX_OPEN`, report the already-open PR(s) and **end the run** (nothing to do until a
+  reviewer merges or closes them). Otherwise continue to Step 1.
+
 ## Step 1 — Pick a version and confirm the instance is up
 
 The version comes from the candidate's docs path (`17/...` → v17, `18/...` → v18). If starting from a
@@ -120,7 +145,8 @@ This is the core of the skill. Work through `$DOCS/<version>/umbraco-cms/**` onl
 3. **Surface a single best candidate** — the image plus the article that uses it — and confirm with
    the user before capturing. Confirm it is locally reproducible (a CMS backoffice screen, not a
    Cloud/Deploy dialog and not an add-on product).
-4. Do not proceed to another image until the current one is finished through its PR (Step 7).
+4. Choose **one** candidate for this run and take only that one forward. This run ends when its PR is
+   open (Step 8) — any other candidates are left for a future invocation.
 
 ## Step 3 — Understand what the image depicts
 
@@ -223,10 +249,13 @@ Notes:
 - GitBook builds a preview per push; the PR checks include a `docs.umbraco.com` revision link — return
   it plus the PR URL to the user once it's built.
 
-## Step 8 — Next image
+## Step 8 — Stop (one PR per run)
 
-Only after the current image's PR is open, return to Step 2 for the next candidate — when the user
-asks.
+Once the PR is open, **the run is complete.** Report the PR (and preview link) to the user and stop.
+Do not loop back to Step 2, do not scan for more candidates, and do not open a second PR in this run.
+Each invocation handles exactly one image. On a schedule, the next run will refresh the next
+screenshot — but only after this PR is merged/closed, thanks to the Step 0.5 guard, so reviewers are
+never handed a pile of screenshot PRs at once.
 
 ## Gotchas
 
