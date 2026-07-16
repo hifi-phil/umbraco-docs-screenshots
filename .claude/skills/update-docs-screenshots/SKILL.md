@@ -208,9 +208,12 @@ cd "$HARNESS"
 URL=https://localhost:44327 npx playwright test tests/capture-<name>.spec.ts --project=chromium
 ```
 
-Working out the routes/selectors is easier interactively first — the
-`umbraco-cms-backoffice-skills:umbraco-chrome-navigation` skill drives the live backoffice and reads
-the shadow-DOM state, which helps find the right route and the components to wait on.
+**Work out routes/selectors with Playwright itself — not claude-in-chrome.** Write a throwaway
+`tests/explore-*.spec.ts` that logs in, navigates, and dumps a shadow-DOM-piercing snapshot of
+visible actionable elements (walk the DOM, recursing into every `el.shadowRoot`, and print
+`tag[role] "label"`). Playwright's own locators already pierce open shadow DOM, so
+`getByRole`/`getByText` work across web-component boundaries. Iterate the explore spec until you know
+the exact clicks, then bake them into the capture spec. Delete the explore spec afterwards.
 
 ## Step 6 — Review
 
@@ -271,7 +274,21 @@ never handed a pile of screenshot PRs at once.
 - **Self-signed certs.** `ignoreHTTPSErrors: true` is already set in `playwright.config.ts`.
 - **Instance must be running** before Playwright runs (Step 1).
 
-## Related skills
+### Backoffice-driving gotchas (learned in real runs)
 
-- `umbraco-cms-backoffice-skills:umbraco-chrome-navigation` — interactively work out backoffice
-  routes/selectors and read live shadow-DOM state.
+- **Use native Playwright clicks for tree/router navigation — they are trusted.** A synthetic click
+  from `page.evaluate(() => el.click())` is ignored by the SPA router and the tree, so nothing
+  navigates. Use `page.getByRole('link'/'button', { name }).click()` instead. (Fine to *walk* the
+  shadow DOM in `page.evaluate` to read state — just don't click through it.)
+- **Duplicate labels → strict-mode violations.** Several controls share a label (e.g. two `Insert`
+  buttons). Scope the locator (`page.locator('#insert-button').getByRole('button', { name: 'Insert' })`)
+  or use `.first()`.
+- **Modals render in a portal and screenshots can lag.** After opening a modal, wait on a distinctive
+  action that only exists once it's live (e.g. its `Submit` button `.waitFor({ state: 'visible' })`)
+  then a short `waitForTimeout` to settle, rather than asserting on title text.
+- **`Error refreshing access token, performing full re-login.` is normal.** The `umbracoApi` fixture
+  logs this on a cold start; it is not a failure.
+- **Fresh DB content is unpublished.** Query/preview screens can show empty results ("0 published
+  items returned"). If the shot needs populated data, publish content via `umbracoApi` first.
+- **Starter Kit template hierarchy (v18):** templates nest under `_Master` (there is no top-level
+  `Home` template). Expand `Templates`, then `_Master`, to reach child templates.
