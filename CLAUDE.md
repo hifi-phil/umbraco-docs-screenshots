@@ -131,6 +131,33 @@ npx playwright install firefox webkit   # add more browsers if needed
   Select the version via the Playwright project rather than a single global `baseURL`.
 - The relevant Umbraco instance(s) must be running before Playwright tests execute.
   A `webServer` block in `playwright.config.ts` can launch `dotnet run` automatically.
+- ⚠️ **`playwright.config.ts` `baseURL` / `process.env.URL` default is stale (`44343`)** —
+  that port belongs to no current instance (v17 = 44322, v18 = 44327). The helper reads
+  `process.env.URL` for **API login**, but the browser resolves relative `page.goto()`
+  paths against **`baseURL`** — so a wrong `baseURL` silently sends the browser to a
+  different (or dead) site while login still "succeeds". Until the config is fixed, pass
+  `URL=https://localhost:443xx` **and** navigate with **absolute URLs** in the spec (see
+  `tests/compare-content-v18.spec.ts`), or set `baseURL: process.env.URL`.
+- **Check for stray/stale processes before trusting a port.** A removed legacy instance
+  (`demo/Demo`, deleted in git) can leave a `dotnet run` process still bound to a port
+  (it was found on `44343`). Its source `wwwroot` is gone, so its login page throws
+  `ArgumentException: The directory name '.../demo/Demo/wwwroot/' does not exist`. If you
+  see that error, a ghost instance is answering — find it with
+  `lsof -nP -iTCP:<port> -sTCP:LISTEN` / `ps aux | grep Demo` and stop it.
+- **Don't nest one version project inside another.** A stray `demo/v18/demo/v17/` copy
+  makes the v18 build pull in a second `Program.cs` → `CS8802: Only one compilation unit
+  can have top-level statements`. Each version project must be a single flat folder.
+
+### What is (and isn't) screenshottable on a local instance
+
+- The backoffice was **fully redesigned in v14+ ("Bellissima", Lit/web-components)**. Any
+  docs screenshot showing the **old AngularJS UI** (circular logo + horizontal section
+  tabs, a `Forms` tab, etc.) is **outdated for v17/v18** — the entire chrome, tree,
+  workspace, and buttons differ.
+- **Compare / Queue for transfer / Transfer now / Partial restore are Umbraco Deploy
+  (Cloud) features** — they compare a *Current* vs *Live* environment. A vanilla local
+  single-environment CMS has none of this, so those dialogs **cannot be reproduced
+  locally** regardless of version.
 
 ## Conventions
 
