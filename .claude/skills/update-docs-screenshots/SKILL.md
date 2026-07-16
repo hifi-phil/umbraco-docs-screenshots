@@ -25,6 +25,14 @@ This skill is designed to run **as a scheduled routine**. To avoid overwhelming 
 reviewers, successive scheduled runs must not stack up open PRs — Step 0.5 bails out early if a
 screenshot PR from a previous run is still open.
 
+> ## ⛔ Playwright only — never claude-in-chrome
+> All backoffice interaction (logging in, navigating sections, expanding the tree, opening
+> workspaces/modals, and capturing) is done with **Playwright**. **Do NOT use the
+> `mcp__claude-in-chrome__*` tools or the `umbraco-chrome-navigation` skill** for any part of this —
+> not for exploration, not for capture. Route/selector discovery is a throwaway Playwright
+> `explore-*.spec.ts` (Step 5). If you catch yourself about to open a Chrome tab, stop and write a
+> Playwright spec instead.
+
 ## Repos, instances, scope
 
 | | |
