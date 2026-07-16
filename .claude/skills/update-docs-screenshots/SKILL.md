@@ -184,6 +184,10 @@ cp "$HARNESS/.claude/skills/update-docs-screenshots/assets/capture-template.spec
    "$HARNESS/tests/capture-<name>.spec.ts"
 ```
 
+> **These are temporary, single-run artifacts — not part of the repo.** The copied capture spec, any
+> `tests/explore-*.spec.ts`, and the staged PNG under `screenshots/` exist only to produce this run's
+> image. **Never commit them to the harness repo.** Step 8 deletes them once the docs PR is open.
+
 Edit the config block at the top of the spec (this is the "make dimensions easy to change" knob):
 
 - `BASE` — instance URL (`https://localhost:44322` v17, `https://localhost:44327` v18).
@@ -252,13 +256,25 @@ Notes:
 - GitBook builds a preview per push; the PR checks include a `docs.umbraco.com` revision link — return
   it plus the PR URL to the user once it's built.
 
-## Step 8 — Stop (one PR per run)
+## Step 8 — Clean up temp artifacts, then stop (one PR per run)
 
-Once the PR is open, **the run is complete.** Report the PR (and preview link) to the user and stop.
+First, delete this run's temporary artifacts from the harness repo — they are not part of it and must
+never be committed:
+
+```bash
+cd "$HARNESS"
+rm -f tests/capture-<name>.spec.ts tests/explore-*.spec.ts screenshots/<name>.png
+git status --short   # confirm the harness repo is clean
+```
+
+Then **the run is complete.** Report the PR (and preview link) to the user and stop.
 Do not loop back to Step 2, do not scan for more candidates, and do not open a second PR in this run.
 Each invocation handles exactly one image. On a schedule, the next run will refresh the next
 screenshot — but only after this PR is merged/closed, thanks to the Step 0.5 guard, so reviewers are
 never handed a pile of screenshot PRs at once.
+
+The only durable output of a run lives in the **docs repo** (the committed asset on the PR branch).
+The harness repo should be left exactly as it was found — clean.
 
 ## Gotchas
 
