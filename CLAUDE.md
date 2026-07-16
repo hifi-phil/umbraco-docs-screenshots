@@ -7,7 +7,9 @@ Guidance for working in this repository.
 A workspace for capturing screenshots of the Umbraco backoffice (for documentation),
 built from two parts:
 
-1. **`demo/`** — a local Umbraco 17 CMS instance to screenshot against.
+1. **`demo/`** — local Umbraco CMS instances to screenshot against. There is one
+   instance **per documented Umbraco version** (currently **17** and **18**) so the
+   same screenshot can be captured against each major.
 2. **Playwright** (repo root) — the browser automation / test harness that drives the
    backoffice and captures the screenshots.
 
@@ -19,42 +21,51 @@ built from two parts:
 ├── package.json              # Playwright test project (repo root)
 ├── playwright.config.ts      # Playwright config (TypeScript, Chromium only)
 ├── tests/
-│   └── example.spec.ts       # default scaffold test (not yet customised)
+│   └── backoffice-login.spec.ts   # helper-based login + screenshot
 └── demo/
-    ├── Demo.slnx             # solution file (.NET 10 slnx format)
-    └── Demo/                 # Umbraco 17 web project
-        ├── Demo.csproj
-        ├── Directory.Packages.props   # central package versions (pinned)
-        ├── appsettings.json
-        ├── Program.cs
-        ├── Views/ wwwroot/ umbraco/   # Umbraco app + SQLite DB under umbraco/Data/
+    ├── v17/                  # Umbraco 17 web project  (screenshot target)
+    └── v18/                  # Umbraco 18 web project  (screenshot target)
 ```
 
-## The Umbraco demo instance (`demo/Demo`)
+Each version project (`v17/`, `v18/`) contains its own `<name>.csproj`,
+`Directory.Packages.props` (pinned versions), `appsettings*.json`, `Program.cs`,
+`Properties/launchSettings.json`, and `umbraco/` app folder with a SQLite DB under
+`umbraco/Data/`.
 
-| | |
-|---|---|
-| Umbraco | 17.5.3 (`Umbraco.Cms`), target framework `net10.0` |
-| Starter kit | `Clean` 7.0.8 (targets Umbraco 17) |
-| Database | SQLite — `demo/Demo/umbraco/Data/Umbraco.sqlite.db` |
-| Backoffice | https://localhost:44343/umbraco |
-| Frontend | https://localhost:44343 (also http://localhost:53960) |
-| Admin login | `admin@admin.com` / `1234567890` |
+## The Umbraco demo instances
 
-Package versions are pinned centrally in `demo/Demo/Directory.Packages.props`
-(central package management is on). Keep `Clean` on a **7.x** version — Clean 8.x
-targets Umbraco 18 and causes an `NU1107` `Umbraco.Cms.Web.Common` version conflict
-against the Umbraco 17 packages.
+The screenshot targets are `demo/v17` and `demo/v18`. Both target framework
+`net10.0`, use SQLite, install unattended on first boot, and share the same admin
+login.
+
+| | `demo/v17` | `demo/v18` |
+|---|---|---|
+| Umbraco (`Umbraco.Cms`) | **17.5.3** | **18.0.2** |
+| Starter kit | `Umbraco.TheStarterKit` 17.0.0 | `Umbraco.TheStarterKit` 18.0.0 |
+| Backoffice | https://localhost:44322/umbraco | https://localhost:44327/umbraco |
+| Frontend (https) | https://localhost:44322 | https://localhost:44327 |
+| Frontend (http) | http://localhost:60011 | http://localhost:38671 |
+| Database | SQLite — `demo/v17/umbraco/Data/Umbraco.sqlite.db` | SQLite — `demo/v18/umbraco/Data/Umbraco.sqlite.db` |
+
+**Admin login (both):** `admin@admin.com` / `1234567890` — provisioned via
+`InstallUnattended` in `appsettings.Development.json`.
+
+Package versions are pinned centrally in each project's `Directory.Packages.props`
+(central package management is on). Keep each project's `Umbraco.Cms` and
+`Umbraco.TheStarterKit` majors aligned (17 kit with 17 CMS, 18 kit with 18 CMS) to
+avoid `NU1107` version-conflict errors.
 
 ### Run the CMS
 
 ```bash
 cd demo
-dotnet run --project Demo          # serves https://localhost:44343
+dotnet run --project v17     # serves https://localhost:44322
+dotnet run --project v18     # serves https://localhost:44327
 ```
 
-On first boot you may see transient `SQLite Error 14: unable to open database file`
-lines before the DB is created — these are expected; wait for `Now listening on:`.
+Run each in its own terminal (or background) so both are up at once. On first boot
+you may see transient `SQLite Error 14: unable to open database file` lines before the
+DB is created — these are expected; wait for `Now listening on:`.
 
 ## Playwright (repo root)
 
@@ -62,14 +73,29 @@ lines before the DB is created — these are expected; wait for `Now listening o
 |---|---|
 | Runner | `@playwright/test` 1.61.x, TypeScript |
 | Browsers | Chromium only installed (Firefox/WebKit commented out in config) |
-| Umbraco helpers | `@umbraco-cms/acceptance-test-helpers` **17.5.3** (matches the CMS) |
+| Umbraco helpers | `@umbraco-cms/acceptance-test-helpers` — **one version per CMS major** |
 
 ### Umbraco test helpers
 
 Use `@umbraco-cms/acceptance-test-helpers` — the **successor** to the now-deprecated
-`@umbraco/playwright-testhelpers`. Its version tracks the CMS major/minor exactly, so
-keep it pinned to the Umbraco version in `demo/` (currently **17.5.3**). Peer dep:
-`@playwright/test >= 1.56`.
+`@umbraco/playwright-testhelpers`. Its version tracks the CMS major/minor exactly.
+Because we drive **both 17 and 18**, both helper versions are needed:
+
+- **17.5.3** for `demo/v17`
+- **18.0.2** for `demo/v18`
+
+The helpers read their target URL and credentials from **global `process.env`** at
+import time:
+
+| Env var | Meaning | Default in this repo |
+|---|---|---|
+| `URL` | backoffice base URL | set per run/project |
+| `UMBRACO_USER_LOGIN` | admin email | `admin@admin.com` |
+| `UMBRACO_USER_PASSWORD` | admin password | `1234567890` |
+
+Because that config is read once at import, the target URL is fixed per **process**.
+Version selection is therefore done with **Playwright projects** (`umbraco-17` /
+`umbraco-18`), each pointing at its own base URL and using the matching helper version.
 
 ```typescript
 import { test, ApiHelpers, UiHelpers, ConstantHelper } from '@umbraco-cms/acceptance-test-helpers';
@@ -80,6 +106,10 @@ test('example', async ({ umbracoApi, umbracoUi }) => {
 });
 ```
 
+The `test` fixture authenticates before the test body runs: it tries a token refresh,
+and when that fails (cold start) performs a full re-login via the Management API using
+`UMBRACO_USER_LOGIN` / `UMBRACO_USER_PASSWORD`. No credentials are typed into the UI.
+
 Recommended split for this project: use `umbracoApi` for **login + seeding
 deterministic content/data**, and raw Playwright (`page.screenshot()` etc.) for the
 actual screenshot capture, so you keep precise control over what's on screen.
@@ -87,23 +117,23 @@ actual screenshot capture, so you keep precise control over what's on screen.
 ```bash
 npx playwright test            # headless
 npx playwright test --ui       # interactive UI mode
+npx playwright test --headed   # watch a real browser window
 npx playwright codegen         # record actions into a test
 npx playwright install firefox webkit   # add more browsers if needed
 ```
 
 ### Gotchas when testing against the local Umbraco
 
-- The dev site uses a **self-signed HTTPS cert**. Set `ignoreHTTPSErrors: true` in
-  `playwright.config.ts` `use` block (not set by default) or requests to
-  `https://localhost:44343` will fail.
-- No `baseURL` is configured yet — either add
-  `baseURL: 'https://localhost:44343'` to the config or use absolute URLs.
-- The Umbraco CMS must be running (see above) before Playwright tests execute.
-  Consider wiring `webServer` in `playwright.config.ts` to launch `dotnet run`
-  automatically.
+- The dev sites use **self-signed HTTPS certs**. `ignoreHTTPSErrors: true` is set in
+  `playwright.config.ts` (`use` block) — required or requests to
+  `https://localhost:443xx` fail.
+- Target URLs: **v17 → `https://localhost:44322`**, **v18 → `https://localhost:44327`**.
+  Select the version via the Playwright project rather than a single global `baseURL`.
+- The relevant Umbraco instance(s) must be running before Playwright tests execute.
+  A `webServer` block in `playwright.config.ts` can launch `dotnet run` automatically.
 
 ## Conventions
 
 - Temporary/scratch files do not belong in the repo.
 - The root `.gitignore` ignores `node_modules/`, `test-results/`, `playwright-report/`,
-  and Playwright caches. The Umbraco project has its own `.gitignore` in `demo/Demo/`.
+  and Playwright caches. Each Umbraco project has its own `.gitignore`.
