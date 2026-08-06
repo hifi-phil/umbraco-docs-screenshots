@@ -2,14 +2,32 @@
 
 ## Dimensions (Step 6)
 
-Read the original's pixel size so the capture can match it:
+Read the original's pixel size so the capture can match it. `sips` is **macOS-only** — it doesn't
+exist on the Linux containers a cloud/routine run uses. Read PNGs cross-platform instead: a PNG's
+width/height live at a fixed byte offset in its IHDR chunk, so a tiny Node snippet (Node's already a
+hard dependency here) reads it with no external tool at all — verified against a real file, matches
+`sips` exactly:
 
 ```bash
-sips -g pixelWidth -g pixelHeight <path-to-original.png>
+node -e "
+const buf = require('fs').readFileSync(process.argv[1]);
+console.log('width:', buf.readUInt32BE(16), 'height:', buf.readUInt32BE(20));
+" <path-to-original.png>
 ```
+
+For a non-PNG original (occasionally `.jpg`), `file <path>` reports dimensions in its output on both
+macOS and Linux (verified: `..., 1560x810, components 3`) — parse the `WxH` out of that instead.
 
 There is no single docs standard — many tutorial shots are ~800px wide, full-window backoffice shots
 run ~1450–1900px, some are retina (2800+). Feed the original's size into the capture config below.
+
+**If the original has hand-added annotations** (arrows/callout labels pointing into extra margin
+around the actual UI, added in an external image editor after the raw screenshot was taken — a real
+example: a docs image with red arrows in blank space labeling "Preset crops"/"Focal Point picker"),
+its full canvas size includes that annotation margin, which a raw Playwright capture will never
+reproduce. Match the **functional content area's** proportions in that case, not the padded
+annotated canvas — recreating the original's exact pixel dimensions isn't the actual goal, showing
+the same UI content is.
 
 ## Capture (Step 7)
 
@@ -41,8 +59,15 @@ Edit the config block at the top of the spec (this is the "make dimensions easy 
   `test.use({ viewport, deviceScaleFactor })` — `page.setViewportSize()` alone can't set this,
   it's a browser-context creation option.
 - `MATCH_MODE` — `'viewport'` (final size = viewport × scale) or `'exact'` (post-crop/resize to the
-  original's exact pixels in the Review step).
+  original's exact pixels in the Review step — **macOS-only**, since it needs `sips`; see Review).
 - `CLIP` — optional `{ x, y, width, height }` region, or leave `null` for the whole viewport.
+  **Prefer computing `VIEWPORT` (or `CLIP`) directly from Step 6's target dimensions** — set it to
+  literally equal the target size (accounting for `DEVICE_SCALE_FACTOR`) so Playwright's own
+  screenshot produces the right size natively, with no post-processing step or platform-specific
+  tool needed at all. This is the cross-platform-safe default; don't guess at a crop region and
+  fix it up afterward — a mismatched guess is how a real run ended up with a capture cut off short
+  of what the original showed (PR #8305: original 944×720, capture came out 970×460, missing a
+  metadata panel the original included).
 - `navigate(page, umbracoUi)` — the navigation steps: expand tree, open a node, switch a workspace
   tab, open a menu/modal — whatever reaches the area identified in Step 5.
 
@@ -83,11 +108,19 @@ use claude-in-chrome for this — see the hard rule in SKILL.md.
 ## Review (Step 8)
 
 - Read the new capture next to the original and confirm it shows the **same screen** in the current
-  UI (right section, node, tab, state).
-- Verify dimensions: `sips -g pixelWidth -g pixelHeight screenshots/<name>.png`.
-- If `MATCH_MODE='exact'` and the size differs, crop/resize to the original's exact W×H:
+  UI (right section, node, tab, state) — and just as importantly, that **nothing the original
+  showed is missing or cut off** in the new one (a metadata panel, a lower section of a form, …).
+  Matching numeric dimensions doesn't guarantee this — a real run's capture had the "right"
+  dimensions for its `CLIP` region but that region itself was too short, silently cropping out
+  content the original included. Read the image, don't just check its size.
+- Verify dimensions (same Node/`file` approach as Step 6 — `sips` is macOS-only):
   ```bash
-  sips -c <height> <width> screenshots/<name>.png        # crop to HxW (centered)
-  # or: sips -z <height> <width> screenshots/<name>.png   # resize to HxW
+  node -e "const b=require('fs').readFileSync(process.argv[1]);console.log(b.readUInt32BE(16), b.readUInt32BE(20))" screenshots/<name>.png
   ```
-- If the screen or content is wrong, adjust `navigate()` / seeding and re-run the capture.
+- If the size or content is wrong, **fix it at the source and recapture** — adjust `VIEWPORT`/`CLIP`
+  (sized from Step 6's target, per Step 7) or `navigate()`/seeding, then re-run. This is the
+  cross-platform-safe path.
+- **macOS only:** `sips -c <height> <width> screenshots/<name>.png` (crop) / `sips -z <height>
+  <width> screenshots/<name>.png` (resize) can post-process `MATCH_MODE='exact'` output — but
+  recapturing with the right `VIEWPORT`/`CLIP` is preferred even here, since it doesn't risk
+  cropping into content the way a guessed post-hoc crop region can.

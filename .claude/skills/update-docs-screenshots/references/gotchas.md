@@ -18,13 +18,27 @@
   dashboard's DOM: 0 `data-testid` attributes anywhere, 18 `data-mark` ones, including
   `section-links` itself. This config is already set; if `umbracoUi` navigation starts failing,
   check this hasn't been removed before assuming the target screen has no helper coverage.
-- **Preserve the filename.** Docs reference assets by filename; replacing in place keeps every
-  reference valid and avoids editing markdown. Only rename/move if you also add a redirect and update
-  references (out of scope for a straight refresh).
+- **Filename normally stays put — except a stale version marker.** Docs reference assets by
+  filename, so replacing in place avoids editing markdown by default. Step 9 does deliberately
+  rename in one specific case: a leftover old-version marker on the filename itself (`-v9`, `_v10`,
+  …) is misleading once the shot shows current UI, since the version *folder* already disambiguates
+  — `scripts/rename-stale-image.sh` strips it and every markdown reference gets updated to match.
+  Don't rename for any other reason (a real move/reorganization still needs a redirect, out of
+  scope here).
 - **`umbraco-cms` only.** Skip the cloud set and all add-on products (see Scope in SKILL.md). If a
   shot can only exist in Cloud/Deploy or an add-on, it is not a candidate.
 - **Self-signed certs.** `ignoreHTTPSErrors: true` is already set in `playwright.config.ts`.
 - **Instance must be running** before Playwright runs (Step 4).
+- **Cloud-container Chromium revision mismatch.** A run on Claude web hit the pinned
+  `@playwright/test` version expecting a Chromium build (`chrome-headless-shell-1228`) that wasn't
+  the one pre-installed in the container (`chromium-1194`). A temporary
+  `use: { launchOptions: { executablePath: '<installed-chromium-path>' } }` in
+  `playwright.config.ts` works around it — but it's an **environment quirk, not a repo change**.
+  Revert it in Step 10 along with everything else that isn't this run's actual output.
+- **`dotnet run` leaves trivial Razor diffs.** Booting an instance can leave "no newline at end of
+  file"-style changes on `demo/*/Views/*.cshtml` — harmless runtime artifacts, not real edits.
+  They'd trip the "leave the harness repo clean" check in Step 10 if not reverted alongside
+  everything else `git status --short` turns up.
 
 ## Backoffice-driving gotchas (learned in real runs)
 
@@ -49,3 +63,11 @@
   them as `umbracoUi.content.goToSection(...)`, not `umbracoUi.goToSection(...)` (the latter throws
   `TypeError: ... is not a function`). Any sub-helper works identically since they all inherit the
   same base methods; which one you pick doesn't need to match the screen.
+- **The Starter Kit's default Image data type ships with zero crop presets.** A screenshot that's
+  supposed to show preset crops (e.g. "Height"/"Width" boxes next to the image field) needs those
+  presets configured on the Image data type first — Label/Alias/Width/Height per preset — it isn't
+  just navigation to an existing screen.
+- **The crop-editor's inline "Create" submit button doesn't share a test-id with the initial
+  placeholder button that opens it.** Reusing the same test-id selector for both finds the wrong
+  (or no) element for the submit click. Use `getByRole('button', { name: 'Create' }).last()` for the
+  submit action, not the same selector that opened the editor.

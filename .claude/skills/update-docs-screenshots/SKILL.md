@@ -37,6 +37,7 @@ needs explanation or heuristics rather than execution, it's a doc in `references
 | `scripts/normalize-image-ref.sh` | Step 3, Slack branch — turns a pasted GitHub URL into the plain path `resolve-image.sh` expects |
 | `scripts/ensure-instance-up.sh` | Step 4 — checks/starts the matching demo instance |
 | `scripts/list-stale-candidates.sh` | Step 3, discovery branch — bounds ~3,800 images down to a short prioritized shortlist |
+| `scripts/rename-stale-image.sh` | Step 9 — strips a stale version-marker suffix from the filename, if present |
 | `references/image-selection.md` | Step 3, discovery branch — the pre-v14 detection heuristic (judgment, not scriptable) |
 | `references/slack-queue.md` | Step 3, Slack branch — the channel-as-queue algorithm and reply conventions |
 | `references/capture-workflow.md` | Steps 6–8's dimension/config/review mechanics |
@@ -138,7 +139,10 @@ Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
 ## Step 2 — Don't stack PRs (scheduled-run guard)
 
-Count open screenshot PRs from previous runs before doing any work:
+Count open screenshot PRs from previous runs before doing any work. **This is a `gh`/MCP fork per
+the `github-ops` skill — check `command -v gh` first**, since Claude web / a scheduled routine has
+no `gh` CLI, only `mcp__github__*` tools (confirmed: the script fails loudly with exit `3` if
+called without `gh`, rather than silently reporting zero open PRs and bypassing the guard):
 
 ```bash
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh discovery "$FORK_OWNER"   # discovery mode
@@ -146,7 +150,15 @@ Count open screenshot PRs from previous runs before doing any work:
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh slack "$FORK_OWNER"        # Slack mode
 ```
 
-The script prints the open count (and, if any are open, their PR numbers/URLs) and exits:
+**No `gh`:** call `mcp__github__search_pull_requests` (query
+`repo:umbraco/UmbracoDocs is:pr is:open author:<FORK_OWNER>`), filter the results yourself for a
+head branch starting with `update-screenshot-`, and count them — there's no script for this path,
+since MCP tools are only callable by you, not from a bash script. Apply the exact same exit-code
+logic below by hand. (Tool name per the current `github-ops` skill; confirm against the live
+`mcp__github__*` list if it doesn't match.)
+
+The script (or your manual count, on the MCP path) gives the open count (and, if any are open,
+their PR numbers/URLs) and exits/resolves to:
 
 - **`0`** — proceed to Step 3. In targeted mode this includes the case where the guard tripped but is
   only a warning (printed to stderr) — the user asked for this specific image, so it doesn't stop
@@ -270,26 +282,64 @@ re-run Step 7.
 
 ## Step 9 — Replace the asset and open the PR
 
-In the **docs repo**, on a feature branch, replace the asset in place (keep the exact path and
-filename so every `.md` reference keeps working), then push and open a draft PR:
+In the **docs repo**, on a feature branch, replace the asset (see the renaming check below), then
+push and open a draft PR:
 
 ```bash
 cd "$DOCS"
 git checkout main && git pull upstream main
 git checkout -b update-screenshot-<name>
-cp "$HARNESS/screenshots/<name>.png" <version>/umbraco-cms/.../<original-filename>.png
-git add <path-to-asset>
+```
+
+**Check whether the filename itself should change first.** A stale version marker on the filename
+(e.g. `cropping-images-v9.png`) is misleading once the shot shows the current UI — the version
+*folder* (`17/`, `18/`) already disambiguates, so the marker on the filename is just leftover noise:
+
+```bash
+OLD_NAME="$(basename "<original-filename>")"
+NEW_NAME="$(.claude/skills/update-docs-screenshots/scripts/rename-stale-image.sh "$OLD_NAME")"
+
+if [ "$NEW_NAME" != "$OLD_NAME" ] && [ ! -e "<asset-dir>/$NEW_NAME" ]; then
+  cp "$HARNESS/screenshots/<name>.png" "<asset-dir>/$NEW_NAME"
+  git rm --quiet "<asset-dir>/$OLD_NAME"
+  # Update every markdown reference to the old filename — portable (works without GNU vs BSD sed):
+  for f in $(grep -rl "$OLD_NAME" --include='*.md' .); do
+    node -e "
+      const fs = require('fs');
+      const [file, oldName, newName] = process.argv.slice(1);
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').split(oldName).join(newName));
+    " "$f" "$OLD_NAME" "$NEW_NAME"
+  done
+  git add -A   # picks up the renamed asset + every edited .md file
+else
+  cp "$HARNESS/screenshots/<name>.png" "<asset-dir>/$OLD_NAME"
+  git add "<asset-dir>/$OLD_NAME"
+fi
+```
+
+The script only recognizes a version marker as a **suffix** (`-v9`, `_v9`, `v9` right before the
+extension — the common case); a marker as a **prefix** (`v9-media-types...`) prints the name
+unchanged, so it's left alone rather than guessed at. Also skips the rename if the new name would
+collide with an existing file.
+
+```bash
 git commit -m "Update <article> backoffice screenshot for v<version>"
 git push origin update-screenshot-<name>          # origin = the fork ($FORK_OWNER)
 gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --draft \
   --title "Update <article> backoffice screenshot" --body "Refreshed outdated pre-v14 screenshot for v<version>."
 ```
 
+Everything above (`git checkout`/`add`/`commit`/`push`) works the same whether or not `gh` is
+installed — only the final PR-creation call needs a fallback. **No `gh`:** use
+`mcp__github__create_pull_request` with the same `base`/`head`/`title`/`body`/`draft` values (per
+the `github-ops` skill).
+
 Notes:
 - The branch lives on the fork (`origin`); the PR is opened against upstream `umbraco/UmbracoDocs`,
   base branch `main`. Keep it a **draft** unless the user says otherwise.
-- Because only an image is being replaced (no markdown/prose changes), Vale has nothing to lint. If a
-  future run also edits `.md`, run `vale <changed.md>` and fix any errors before pushing.
+- If the filename wasn't renamed, only an image changed and Vale has nothing to lint. **If it was
+  renamed**, markdown files changed too — run `vale <changed.md>` on each and fix any errors before
+  pushing.
 - GitBook builds a preview per push; the PR checks include a `docs.umbraco.com` revision link — return
   it plus the PR URL to the user once it's built.
 - **Slack mode:** once `gh pr create` returns the PR URL, reply in-thread to the source message with
@@ -299,12 +349,27 @@ Notes:
 ## Step 10 — Clean up temp artifacts, then stop (one PR per run)
 
 First, delete this run's temporary artifacts from the harness repo — they are not part of it and must
-never be committed:
+never be committed. **Delete the exact filenames you created, never a wildcard** — `screenshots/`
+can hold other legitimate images from other runs or manual work, and `rm -f screenshots/*.png` has
+already once deleted three unrelated pre-existing screenshots that had nothing to do with the run:
 
 ```bash
 cd "$HARNESS"
-rm -f tests/capture-<name>.spec.ts tests/explore-*.spec.ts screenshots/<name>.png
-git status --short   # confirm the harness repo is clean
+rm -f "tests/capture-<name>.spec.ts" "screenshots/<name>.png"
+rm -f tests/explore-*.spec.ts   # only if you created one — still name-specific, never a bare *.png/*.ts
+```
+
+Then check for anything else that shouldn't be committed — an environment workaround (e.g. a
+temporary `launchOptions.executablePath` in `playwright.config.ts` to point at whatever Chromium
+revision is actually installed, if it didn't match what the pinned Playwright version expected) or
+harmless `dotnet run`-generated diff noise on `demo/*/Views/*.cshtml` (trailing-newline changes from
+the Razor runtime — not a real edit) both count. Revert anything you find that isn't this run's
+intended change:
+
+```bash
+git status --short   # anything left is either the PR-worthy files (none, in the harness repo) or noise
+git checkout -- <any such file>   # revert environment workarounds / runtime noise individually
+git status --short   # confirm truly clean before reporting done
 ```
 
 Then **the run is complete.** Report the PR (and preview link) to the user and stop.
