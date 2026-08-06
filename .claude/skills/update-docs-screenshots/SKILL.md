@@ -194,9 +194,11 @@ Read the original's pixel size so the capture can match it — command and sizin
 
 ## Step 7 — Use Playwright to navigate to that area and recreate the shot
 
-The capture is Playwright-driven end to end: copy the template, edit its config block, drive the
-instance to the exact screen from Step 5, and capture. The config knobs, the explore-spec technique
-for finding routes/selectors, and the run command are all in `references/capture-workflow.md`.
+The capture is Playwright-driven end to end: copy the template matching `$VERSION` (there's one per
+CMS major — each imports the matching helper version), edit its config block, drive the instance to
+the exact screen from Step 5 preferring `umbracoUi` helpers over hand-rolled locators, and capture.
+The config knobs, the `umbracoUi` navigation methods, the explore-spec fallback for uncovered
+screens, and the run command are all in `references/capture-workflow.md`.
 
 > **These are temporary, single-run artifacts — not part of the repo.** The copied capture spec, any
 > `tests/explore-*.spec.ts`, and the staged PNG under `screenshots/` exist only to produce this run's

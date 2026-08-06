@@ -1,9 +1,23 @@
 # Gotchas
 
-- **Stale port `44343`.** `playwright.config.ts` `baseURL`/`process.env.URL` default to a dead
-  instance. Always pass `URL=https://localhost:443xx` on the command line **and** navigate with
-  absolute URLs in the spec, or the browser silently hits the wrong/dead site while API login still
-  "succeeds". The template already reads `process.env.URL` and uses absolute URLs.
+- **No single default URL/instance.** `playwright.config.ts`'s `baseURL` is tied to `process.env.URL`
+  (no more stale hardcoded port), but the acceptance-test-helpers read `process.env.URL` at
+  **import time**, before Playwright applies any project's `use.baseURL` — so passing
+  `--project=umbraco-17`/`umbraco-18` alone does *not* set it. Always pass
+  `URL=https://localhost:443xx` explicitly on the command line **and** navigate with absolute URLs
+  in the spec (the templates already do both).
+- **The helper version must match the CMS major.** `@umbraco-cms/acceptance-test-helpers` (17.5.3)
+  and the aliased `@umbraco-cms/acceptance-test-helpers-v18` (18.0.2) are both installed — use
+  `capture-template.spec.ts` for v17, `capture-template-v18.spec.ts` for v18. Mismatching them isn't
+  just a version-pinning nicety: a 17.x helper's locators can genuinely fail to find elements a v18
+  backoffice renders differently, and vice versa.
+- **`umbracoUi` helpers need `testIdAttribute: 'data-mark'` in `playwright.config.ts`.** They're
+  built on Playwright's `getByTestId()`, but the backoffice's own convention is `data-mark`, not
+  the `data-testid` Playwright defaults to. Without this config, `umbracoUi.*.goToSection()` and
+  most other helper methods silently find nothing and time out — confirmed by dumping a live v18
+  dashboard's DOM: 0 `data-testid` attributes anywhere, 18 `data-mark` ones, including
+  `section-links` itself. This config is already set; if `umbracoUi` navigation starts failing,
+  check this hasn't been removed before assuming the target screen has no helper coverage.
 - **Preserve the filename.** Docs reference assets by filename; replacing in place keeps every
   reference valid and avoids editing markdown. Only rename/move if you also add a redirect and update
   references (out of scope for a straight refresh).
@@ -30,3 +44,8 @@
   items returned"). If the shot needs populated data, publish content via `umbracoApi` first.
 - **Starter Kit template hierarchy (v18):** templates nest under `_Master` (there is no top-level
   `Home` template). Expand `Templates`, then `_Master`, to reach child templates.
+- **`umbracoUi` has no top-level `goToSection`/`clickCaretButtonForName`.** These live on
+  `UiBaseLocators`, which every domain sub-helper (`content`, `media`, `dataType`, …) extends — call
+  them as `umbracoUi.content.goToSection(...)`, not `umbracoUi.goToSection(...)` (the latter throws
+  `TypeError: ... is not a function`). Any sub-helper works identically since they all inherit the
+  same base methods; which one you pick doesn't need to match the screen.

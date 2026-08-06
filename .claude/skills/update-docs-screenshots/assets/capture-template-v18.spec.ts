@@ -1,16 +1,16 @@
-import { test, UiHelpers, ConstantHelper } from '@umbraco-cms/acceptance-test-helpers';
+import { test, UiHelpers, ConstantHelper } from '@umbraco-cms/acceptance-test-helpers-v18';
 import { expect } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 
 /**
- * Capture template for refreshing an outdated docs backoffice screenshot — v17 variant.
- * Use capture-template-v18.spec.ts instead for a v18 target (each imports the helper version
+ * Capture template for refreshing an outdated docs backoffice screenshot — v18 variant.
+ * Use capture-template.spec.ts instead for a v17 target (each imports the helper version
  * that matches its CMS major — see references/repo-discovery.md).
  *
  * Copy this file to tests/capture-<name>.spec.ts, edit the CONFIG block and the
  * navigate() function, then run it against the matching instance:
  *
- *   URL=https://localhost:44322 npx playwright test tests/capture-<name>.spec.ts --project=umbraco-17
+ *   URL=https://localhost:44327 npx playwright test tests/capture-<name>.spec.ts --project=umbraco-18
  *
  * Login is via the Management API (umbracoApi fixture); the screenshot is a plain
  * Playwright capture of the live backoffice.
@@ -23,7 +23,7 @@ import { execFileSync } from 'node:child_process';
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 // Instance base URL. v17 → 44322, v18 → 44327. Overridden by the URL env var.
-const BASE = process.env.URL ?? 'https://localhost:44322';
+const BASE = process.env.URL ?? 'https://localhost:44327';
 
 // Absolute backoffice path to land on before navigate() runs.
 const ROUTE = '/umbraco/section/content';
