@@ -37,9 +37,10 @@ necessary for a job that only needs to find **one** candidate per run.
    Any of these means the shot predates the Bellissima redesign and is outdated for v17/v18.
    (The current UI has a dark left rail of section icons, a light tree panel, and Lit web-component
    workspaces.)
-4. **Surface a single best candidate** — the image plus the article that uses it — and confirm with
-   the user before capturing. Confirm it is locally reproducible (a CMS backoffice screen, not a
-   Cloud/Deploy dialog and not an add-on product).
+4. **Surface a single best candidate** — the image plus the article that uses it. Confirm it is
+   locally reproducible (a CMS backoffice screen, not a Cloud/Deploy dialog and not an add-on
+   product), then take it forward autonomously — **don't pause for a human to confirm it**; this
+   mode runs unattended, and the draft PR is the actual review checkpoint.
 5. Choose **one** candidate for this run and take only that one forward. This run ends when its PR is
    open (Step 10) — any other candidates are left for a future invocation. If none of the shortlist
    turned out to be a good candidate, re-run the script for a fresh shortlist (the random portion

@@ -83,6 +83,12 @@ Discovery and Slack mode are both designed to run **as a scheduled/repeated rout
 overwhelming the docs PR reviewers, successive runs must not stack up open PRs — Step 2 bails out
 early if a screenshot PR from a previous run is still open.
 
+**Running unattended means never pausing mid-run for a human to confirm anything** — a scheduled
+routine has no one there to answer. Discovery and Slack mode make their own judgment calls and act
+on them autonomously; review happens afterward, via the draft PR (discovery) or the thread reply
+(Slack), never by blocking mid-flow waiting on a response. Only targeted mode — inherently
+interactive, run from a keyboard with the user right there — may pause to ask something.
+
 > ## ⛔ Playwright only — never claude-in-chrome
 > All backoffice interaction (logging in, navigating sections, expanding the tree, opening
 > workspaces/modals, and capturing) is done with **Playwright**. **Do NOT use the
@@ -125,8 +131,11 @@ eval "$(.claude/skills/update-docs-screenshots/scripts/resolve-repos.sh)"
 echo "HARNESS=$HARNESS  DOCS=$DOCS  FORK_OWNER=$FORK_OWNER"
 ```
 
-If `$DOCS` comes back empty, **ask the user for the absolute path to their UmbracoDocs checkout**
-and re-export `DOCS` yourself. Do not guess or proceed without it.
+If `$DOCS` comes back empty, there's no way to guess it safely — proceeding without it risks
+operating against the wrong repo or failing confusingly later. **In an interactive session, ask the
+user** for the absolute path to their UmbracoDocs checkout and re-export `DOCS` yourself. **In an
+unattended routine, there's no one to ask** — report the specific failure (repo resolution failed,
+here's what was tried) and end the run rather than waiting on a prompt that will never be answered.
 
 Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
@@ -177,7 +186,10 @@ instance in Step 4. Follow **one** of the three branches, never more than one:
   neither is up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14
   AngularJS signature and surface one candidate — this needs reading the images and judging them, so
   it isn't scripted; see `references/image-selection.md` for the bounded-shortlist script and the
-  detection heuristic. Confirm the candidate with the user before capturing.
+  detection heuristic. **Do not pause to confirm the candidate with a human before capturing** —
+  this mode is designed for unattended scheduled runs (see below), so there's no one there to
+  answer; take the best candidate forward autonomously. The draft PR opened in Step 9 is the
+  review checkpoint, not this step — a reviewer can always close it if the candidate was wrong.
 - **Slack mode** (invoked as `slack`/`slack:#channel-name`): read the channel as a queue, find the
   next request, and resolve its image reference the same way targeted mode does. This mixes MCP tool
   calls (reading/replying to Slack, which only you can do — not scriptable) with the same
@@ -229,8 +241,13 @@ cd "$DOCS"
 grep -rn "<image-filename>" --include='*.md' <version>/umbraco-cms/
 ```
 
-If nothing references it, say so — the image may be orphaned, and refreshing it changes nothing on
-the site. Ask whether to continue.
+If nothing references it, the image may be orphaned — refreshing it wouldn't change anything a
+reader sees, and without a referencing article there's no screen/state to know what to capture.
+**In targeted mode** (interactive, a human is at the keyboard), say so and ask whether to continue
+anyway. **In discovery and Slack mode** (unattended, no one to ask), don't pause — end the run with
+the reason instead: discovery mode just picked a bad candidate, so report it and stop (a future run
+tries again); Slack mode replies `❌ Errored: image isn't referenced by any article — nothing to
+capture against` and moves on.
 
 Read the surrounding markdown for the feature, screen, tab, and any specific content/state shown.
 Optionally open the rendered page on `docs.umbraco.com` for context. Note the target: which section
