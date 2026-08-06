@@ -73,16 +73,19 @@ DB is created — these are expected; wait for `Now listening on:`.
 |---|---|
 | Runner | `@playwright/test` 1.61.x, TypeScript |
 | Browsers | Chromium only installed (Firefox/WebKit commented out in config) |
-| Umbraco helpers | `@umbraco-cms/acceptance-test-helpers` — **one version per CMS major** |
+| Umbraco helpers | `@umbraco-cms/acceptance-test-helpers` — **one version per CMS major, both installed** |
 
 ### Umbraco test helpers
 
 Use `@umbraco-cms/acceptance-test-helpers` — the **successor** to the now-deprecated
 `@umbraco/playwright-testhelpers`. Its version tracks the CMS major/minor exactly.
-Because we drive **both 17 and 18**, both helper versions are needed:
+Because we drive **both 17 and 18**, both helper versions are installed side by side, the
+second under an npm alias (a package can't have two versions under one name):
 
-- **17.5.3** for `demo/v17`
-- **18.0.2** for `demo/v18`
+```json
+"@umbraco-cms/acceptance-test-helpers": "^17.5.3",
+"@umbraco-cms/acceptance-test-helpers-v18": "npm:@umbraco-cms/acceptance-test-helpers@18.0.2"
+```
 
 The helpers read their target URL and credentials from **global `process.env`** at
 import time:
@@ -93,16 +96,25 @@ import time:
 | `UMBRACO_USER_LOGIN` | admin email | `admin@admin.com` |
 | `UMBRACO_USER_PASSWORD` | admin password | `1234567890` |
 
-Because that config is read once at import, the target URL is fixed per **process**.
-Version selection is therefore done with **Playwright projects** (`umbraco-17` /
-`umbraco-18`), each pointing at its own base URL and using the matching helper version.
+Because that config is read once at import, the target URL is fixed per **process** — and because
+it's a *static* import, so is **which package version backs it**: a single spec file can't switch
+between the two based on which Playwright project runs it (a `--project` flag only changes
+`use.baseURL`/browser options, evaluated per-test, not at module-import time). **Version selection
+is therefore done by which spec file you write/copy**, not by project alone — see the
+update-docs-screenshots skill's two capture templates
+(`capture-template.spec.ts` importing 17.5.3, `capture-template-v18.spec.ts` importing the aliased
+18.0.2) for the pattern. The `umbraco-17`/`umbraco-18` Playwright projects still exist and are worth
+using (`npm run test:v17` / `test:v18`) — they fix `use.baseURL` to the right instance and label
+results — but they don't decide the helper version; the import at the top of the file does that.
 
 ```typescript
 import { test, ApiHelpers, UiHelpers, ConstantHelper } from '@umbraco-cms/acceptance-test-helpers';
+// or, for a v18 target: from '@umbraco-cms/acceptance-test-helpers-v18'
 
 test('example', async ({ umbracoApi, umbracoUi }) => {
   // umbracoApi — fast API setup/teardown + login (handles token/CSRF)
-  // umbracoUi  — backoffice navigation helpers
+  // umbracoUi  — backoffice navigation helpers (see the data-mark gotcha below — required for
+  //              these to find anything)
 });
 ```
 
@@ -127,17 +139,30 @@ npx playwright install firefox webkit   # add more browsers if needed
 - The dev sites use **self-signed HTTPS certs**. `ignoreHTTPSErrors: true` is set in
   `playwright.config.ts` (`use` block) — required or requests to
   `https://localhost:443xx` fail.
-- Target URLs: **v17 → `https://localhost:44322`**, **v18 → `https://localhost:44327`**.
-  Select the version via the Playwright project rather than a single global `baseURL`.
+- Target URLs: **v17 → `https://localhost:44322`**, **v18 → `https://localhost:44327`**. The
+  `umbraco-17`/`umbraco-18` projects set the matching `use.baseURL`, but which helper package
+  version a spec imports is a separate, static choice made by the file itself (see above) — a
+  project alone doesn't determine that.
 - The relevant Umbraco instance(s) must be running before Playwright tests execute.
   A `webServer` block in `playwright.config.ts` can launch `dotnet run` automatically.
-- ⚠️ **`playwright.config.ts` `baseURL` / `process.env.URL` default is stale (`44343`)** —
-  that port belongs to no current instance (v17 = 44322, v18 = 44327). The helper reads
-  `process.env.URL` for **API login**, but the browser resolves relative `page.goto()`
-  paths against **`baseURL`** — so a wrong `baseURL` silently sends the browser to a
-  different (or dead) site while login still "succeeds". Until the config is fixed, pass
-  `URL=https://localhost:443xx` **and** navigate with **absolute URLs** in the spec (see
-  `tests/compare-content-v18.spec.ts`), or set `baseURL: process.env.URL`.
+- **`playwright.config.ts`'s `baseURL` is tied to `process.env.URL`** (`baseURL:
+  process.env.URL`), so the two can no longer silently drift apart the way the old hardcoded
+  `44343` default did (that port belongs to no current instance). But the helper reads
+  `process.env.URL` for **API login** at **import time**, before Playwright evaluates any
+  project's `use.baseURL` — so `--project=umbraco-17`/`umbraco-18` alone does not set it. Always
+  pass `URL=https://localhost:443xx` explicitly on the command line **and** navigate with
+  **absolute URLs** in the spec (see `tests/compare-content-v18.spec.ts` or either capture
+  template) regardless of which project you select.
+- ⚠️ **`umbracoUi` helpers need `testIdAttribute: 'data-mark'` in `playwright.config.ts`.** They're
+  built on Playwright's `getByTestId()`, but the backoffice's own convention is `data-mark`, not
+  the `data-testid` Playwright defaults to — confirmed by dumping a live v18 dashboard's DOM: 0
+  `data-testid` attributes anywhere, 18 `data-mark` ones, including `section-links` itself.
+  Without this config every `umbracoUi.*` navigation call (`goToSection`, tree/tab helpers, …)
+  silently finds nothing and times out. This config is already set in `playwright.config.ts`.
+- **`umbracoUi` has no top-level `goToSection`/`clickCaretButtonForName`.** These live on
+  `UiBaseLocators`, which every domain sub-helper (`content`, `media`, `dataType`, …) extends —
+  call them as `umbracoUi.content.goToSection(...)`, not `umbracoUi.goToSection(...)` (the latter
+  throws `TypeError: ... is not a function`). Any sub-helper works identically.
 - **Check for stray/stale processes before trusting a port.** A removed legacy instance
   (`demo/Demo`, deleted in git) can leave a `dotnet run` process still bound to a port
   (it was found on `44343`). Its source `wwwroot` is gone, so its login page throws

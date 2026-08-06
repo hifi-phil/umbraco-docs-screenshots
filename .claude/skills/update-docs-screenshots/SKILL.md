@@ -1,14 +1,18 @@
 ---
 name: update-docs-screenshots
 description: >-
-  Finds outdated Umbraco backoffice screenshots in the docs and replaces them with fresh captures
-  from a running local instance, then opens a docs PR. Explores the UmbracoDocs repo one article at
-  a time for screenshots that still show the old pre-v14 AngularJS UI, uses Playwright to drive the
-  matching demo instance (v17 or v18) to that exact backoffice area, recaptures the shot at
-  configurable dimensions, drops it in place, and opens a draft docs PR. Use when the
-  user wants to find, refresh, or update outdated backoffice screenshots in the documentation.
-  Trigger on "update docs screenshots", "find outdated screenshots", "refresh backoffice
-  screenshots", "recapture the screenshot for <article>".
+  Replaces outdated Umbraco backoffice screenshots in the docs with fresh captures from a running
+  local instance, then opens a docs PR. Takes an optional image path to recapture a specific
+  screenshot; with no argument it explores the UmbracoDocs repo one article at a time for shots that
+  still show the old pre-v14 AngularJS UI and picks one itself; or in "slack" mode it works a shared
+  Slack channel as a request queue, processing the next unhandled image link and replying in-thread
+  with the resulting PR or error. Either way it uses Playwright to drive the matching demo instance
+  (v17 or v18) to that exact backoffice area, recaptures the shot at configurable dimensions, drops
+  it in place, and opens a draft docs PR. Use when the user wants to find, refresh, or update
+  outdated backoffice screenshots in the documentation, or to work through a Slack channel of
+  screenshot requests. Trigger on "update docs screenshots", "find outdated screenshots", "refresh
+  backoffice screenshots", "update this screenshot", "recapture <path>.png", "recapture the
+  screenshot for <article>", "process the screenshot requests channel", "work the screenshot queue".
 ---
 
 # Update Docs Screenshots
@@ -16,36 +20,89 @@ description: >-
 Repeatable process for replacing outdated Umbraco backoffice screenshots in the docs with fresh
 captures of the current ("Bellissima", v14+) UI.
 
-**One run of this skill creates exactly one image PR, then stops.** Pick a single candidate, take it
-all the way through to an open PR (Step 7), and **end the run there** — do not find, capture, or PR a
-second image in the same run. Refreshing another screenshot requires invoking the skill again. Never
-batch.
+**One run of this skill creates exactly one image PR, then stops.** Take the single image for this
+run — given to you or picked in Step 3 — all the way through to an open PR (Step 9), and **end the
+run there** — do not find, capture, or PR a second image in the same run. Refreshing another
+screenshot requires invoking the skill again. Never batch.
 
-This skill is designed to run **as a scheduled routine**. To avoid overwhelming the docs PR
-reviewers, successive scheduled runs must not stack up open PRs — Step 0.5 bails out early if a
-screenshot PR from a previous run is still open.
+This file carries the step sequence and the decisions at each step. Where a step is pure mechanics
+with no judgment call, it's an executable script in `scripts/` rather than bash to retype; where it
+needs explanation or heuristics rather than execution, it's a doc in `references/`:
+
+| File | What it's for |
+|---|---|
+| `scripts/resolve-repos.sh` | Step 1 — resolves `$HARNESS`/`$DOCS`/`$FORK_OWNER`, nothing to judge |
+| `scripts/check-pr-guard.sh` | Step 2 — counts open screenshot PRs, applies the guard by mode |
+| `scripts/resolve-image.sh` | Step 3, targeted/Slack branches — resolves and validates the image path |
+| `scripts/normalize-image-ref.sh` | Step 3, Slack branch — turns a pasted GitHub URL into the plain path `resolve-image.sh` expects |
+| `scripts/ensure-instance-up.sh` | Step 4 — checks/starts the matching demo instance |
+| `scripts/list-stale-candidates.sh` | Step 3, discovery branch — bounds ~3,800 images down to a short prioritized shortlist |
+| `references/image-selection.md` | Step 3, discovery branch — the pre-v14 detection heuristic (judgment, not scriptable) |
+| `references/slack-queue.md` | Step 3, Slack branch — the channel-as-queue algorithm and reply conventions |
+| `references/capture-workflow.md` | Steps 6–8's dimension/config/review mechanics |
+| `references/gotchas.md` | Known quirks — skim before Step 4 and Step 7, or on unexpected behavior |
+
+## Three modes
+
+The mode is decided by **what the invocation carried**:
+
+| Mode | When | PR guard (Step 2) | Choosing the image (Step 3) |
+|---|---|---|---|
+| **Discovery** (default) | no argument — how scheduled runs fire | **hard stop** if a screenshot PR is open | full scan, picks a candidate itself |
+| **Targeted** | an image path was supplied | **warn only**, run continues | resolves the supplied path |
+| **Slack** | invoked as `slack` (or `slack:#channel-name`) | **hard stop** if a screenshot PR is open (also scheduled-style, repeated) | reads a Slack channel as a queue, resolves the next request |
+
+Targeted mode is for local, interactive use — you already know which image is stale, so the scan is
+wasted work and the reviewer-load guard shouldn't block you. Invoke it with a path relative to the
+docs repo root, or an absolute one:
+
+```
+/update-docs-screenshots 18/umbraco-cms/fundamentals/data/defining-content/images/query-builder.png
+/update-docs-screenshots /Users/me/Projects/UmbracoDocs/18/umbraco-cms/.../query-builder.png
+```
+
+Slack mode is for a shared request queue — anyone can drop an image link in the channel, and each
+invocation works exactly one of them, replying in-thread with the result:
+
+```
+/update-docs-screenshots slack                          # defaults to #docs-screenshot-agent
+/update-docs-screenshots slack:#some-other-channel
+```
+
+The default channel is **`#docs-screenshot-agent`** (private, ID `C0BNAABAFK5` — see
+`references/slack-queue.md`). Only pass `slack:#channel-name` to target a different one.
+
+Targeted and Slack mode relax **candidate selection only** — everything else is unchanged, including
+the one-PR-per-run rule above. Steps 4–10 are identical across all three modes, except that Slack
+mode has one extra obligation layered on top: **whatever step ends the run — success or failure —
+reply in the source message's thread before stopping** (Step 3's Slack branch and
+`references/slack-queue.md` spell out the exact reply format; don't let a failed run leave the
+thread silent, or the next invocation has no way to know that message was already attempted).
+
+Discovery and Slack mode are both designed to run **as a scheduled/repeated routine**. To avoid
+overwhelming the docs PR reviewers, successive runs must not stack up open PRs — Step 2 bails out
+early if a screenshot PR from a previous run is still open.
 
 > ## ⛔ Playwright only — never claude-in-chrome
 > All backoffice interaction (logging in, navigating sections, expanding the tree, opening
 > workspaces/modals, and capturing) is done with **Playwright**. **Do NOT use the
 > `mcp__claude-in-chrome__*` tools or the `umbraco-chrome-navigation` skill** for any part of this —
 > not for exploration, not for capture. Route/selector discovery is a throwaway Playwright
-> `explore-*.spec.ts` (Step 5). If you catch yourself about to open a Chrome tab, stop and write a
+> `explore-*.spec.ts` (Step 7). If you catch yourself about to open a Chrome tab, stop and write a
 > Playwright spec instead.
 
 ## Repos, instances, scope
 
 | | |
 |---|---|
-| Capture harness (`$HARNESS`) | this repo (contains this skill, `demo/`, `tests/`) — resolved in Step 0 |
-| Docs repo (`$DOCS`) | the UmbracoDocs checkout — discovered or asked for in Step 0 |
+| Capture harness (`$HARNESS`) | this repo (contains this skill, `demo/`, `tests/`) — resolved in Step 1 |
+| Docs repo (`$DOCS`) | the UmbracoDocs checkout — discovered or asked for in Step 1 |
 | v17 instance | `$HARNESS/demo/v17` → `https://localhost:44322/umbraco` |
 | v18 instance | `$HARNESS/demo/v18` → `https://localhost:44327/umbraco` |
 | Admin login | `admin@admin.com` / `1234567890` (read from env by the helper) |
 
 Paths are **not** hardcoded — the skill is machine-agnostic. `$HARNESS`, `$DOCS`, and `$FORK_OWNER`
-are established in Step 0 and used throughout. Ports come from `demo/*/Properties/launchSettings.json`
-in this repo, so they are stable across machines.
+are established in Step 1 and used throughout.
 
 **Scope is `umbraco-cms` only.** The local demo instances are a vanilla CMS, so only CMS backoffice
 screens are reproducible. **Skip everything else — do not treat these as candidates:**
@@ -59,187 +116,151 @@ screens are reproducible. **Skip everything else — do not treat these as candi
 
 Effective candidate scope: **`$DOCS/<version>/umbraco-cms/**` only** (version = `17` or `18`).
 
-## Step 0 — Locate the repos (machine-agnostic)
+## Step 1 — Locate the repos (machine-agnostic)
 
-Establish the two repo paths and the fork owner before anything else. **Do not hardcode paths.**
-
-```bash
-# Capture harness = the repo that contains this skill (normally your working directory).
-HARNESS="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-
-# Docs repo: look as a sibling first, then a couple of common roots. A real checkout has a
-# .gitbook.yaml at its root and version folders like 17/ and 18/.
-DOCS=""
-for c in \
-  "$(dirname "$HARNESS")"/UmbracoDocs "$(dirname "$HARNESS")"/umbraco-docs \
-  "$(dirname "$HARNESS")"/docs "$HOME"/Projects/UmbracoDocs "$HOME"/UmbracoDocs; do
-  if [ -f "$c/.gitbook.yaml" ] && [ -d "$c/18" ]; then DOCS="$c"; break; fi
-done
-# Bounded fallback search if still not found.
-if [ -z "$DOCS" ]; then
-  DOCS="$(find "$HOME" -maxdepth 5 -name .gitbook.yaml 2>/dev/null \
-          | while read -r f; do d="$(dirname "$f")"; \
-              git -C "$d" remote -v 2>/dev/null | grep -qi 'UmbracoDocs' && echo "$d" && break; done)"
-fi
-
-echo "HARNESS = $HARNESS"
-echo "DOCS    = ${DOCS:-NOT FOUND}"
-```
-
-- If `$DOCS` is empty, **ask the user for the absolute path to their UmbracoDocs checkout** and use
-  that. Do not guess or proceed without it.
-- Derive the fork owner (head namespace for the PR) from the docs repo's `origin` remote — never
-  assume a username:
+Resolve `$HARNESS`, `$DOCS`, and `$FORK_OWNER` before anything else — **do not hardcode paths**:
 
 ```bash
-FORK_OWNER="$(gh repo view "$DOCS" --json owner -q .owner.login 2>/dev/null \
-  || git -C "$DOCS" remote get-url origin | sed -E 's#.*[:/]([^/]+)/[^/]+(\.git)?$#\1#')"
-echo "FORK_OWNER = $FORK_OWNER"
+eval "$(.claude/skills/update-docs-screenshots/scripts/resolve-repos.sh)"
+echo "HARNESS=$HARNESS  DOCS=$DOCS  FORK_OWNER=$FORK_OWNER"
 ```
+
+If `$DOCS` comes back empty, **ask the user for the absolute path to their UmbracoDocs checkout**
+and re-export `DOCS` yourself. Do not guess or proceed without it.
 
 Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
-## Step 0.5 — Don't stack PRs (scheduled-run guard)
+## Step 2 — Don't stack PRs (scheduled-run guard)
 
-Because this runs on a schedule, check how many screenshot PRs from previous runs are still open
-before doing any work. If the limit is already reached, **stop immediately** — do not explore, capture,
-or open anything. This keeps reviewer load bounded.
+Count open screenshot PRs from previous runs before doing any work:
 
 ```bash
-MAX_OPEN=1   # max concurrent open screenshot PRs from this skill; raise only if reviewers can absorb more
-OPEN=$(gh pr list --repo umbraco/UmbracoDocs --author "$FORK_OWNER" --state open \
-        --json number,headRefName \
-        -q '[.[] | select(.headRefName | startswith("update-screenshot-"))] | length')
-echo "Open screenshot PRs: $OPEN (limit $MAX_OPEN)"
+.claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh discovery "$FORK_OWNER"   # discovery mode
+.claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh targeted "$FORK_OWNER"     # targeted mode
+.claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh slack "$FORK_OWNER"        # Slack mode
 ```
 
-- Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 7 — keep that
-  prefix so this guard keeps working.
-- If `OPEN >= MAX_OPEN`, report the already-open PR(s) and **end the run** (nothing to do until a
-  reviewer merges or closes them). Otherwise continue to Step 1.
+The script prints the open count (and, if any are open, their PR numbers/URLs) and exits:
 
-## Step 1 — Pick a version and confirm the instance is up
+- **`0`** — proceed to Step 3. In targeted mode this includes the case where the guard tripped but is
+  only a warning (printed to stderr) — the user asked for this specific image, so it doesn't stop
+  them.
+- **`1`** — **discovery and Slack mode.** The guard tripped: report the already-open PR(s) and **end
+  the run** — nothing to do until a reviewer merges or closes them. In Slack mode this is a silent
+  stop (no message was chosen yet, so there's no thread to reply to).
 
-The version comes from the candidate's docs path (`17/...` → v17, `18/...` → v18). If starting from a
-version rather than a specific image, ask or default to the one whose instance is already running.
+Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 9 — keep that
+prefix so this guard keeps working.
 
-Check the port, start the instance if needed, wait for `Now listening on:`:
+## Step 3 — Choose the image for this run
+
+Exactly one image comes out of this step, along with its `$VERSION` (`17` or `18`), which selects the
+instance in Step 4. Follow **one** of the three branches, never more than one:
+
+- **Targeted mode** (an image path was supplied): resolve and validate it with the script — no
+  judgment call needed, so this is deterministic. `$ARG` is the path as the user gave it, docs-relative
+  or absolute:
+
+  ```bash
+  eval "$(.claude/skills/update-docs-screenshots/scripts/resolve-image.sh "$ARG" "$DOCS")"
+  echo "IMG=$IMG  REL=$REL  VERSION=$VERSION"
+  ```
+
+  A nonzero exit **ends the run** — the script's stderr message already states the specific reason
+  (file not found, outside the docs checkout, no demo instance for that version, or out of the
+  `umbraco-cms` scope). Never fall back to discovery or substitute a different image on failure. The
+  pre-v14 AngularJS check is **not a gate** here — the user picked this image, so recapturing an
+  already-current shot is legitimate.
+- **Discovery mode** (no path supplied): pick a version to scan first — `$VERSION` isn't known yet
+  the way it is in the other two branches (there's no chosen image to derive it from). Default to
+  whichever demo instance is already listening (`lsof -nP -iTCP:44322/-iTCP:44327 -sTCP:LISTEN`); if
+  neither is up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14
+  AngularJS signature and surface one candidate — this needs reading the images and judging them, so
+  it isn't scripted; see `references/image-selection.md` for the bounded-shortlist script and the
+  detection heuristic. Confirm the candidate with the user before capturing.
+- **Slack mode** (invoked as `slack`/`slack:#channel-name`): read the channel as a queue, find the
+  next request, and resolve its image reference the same way targeted mode does. This mixes MCP tool
+  calls (reading/replying to Slack, which only you can do — not scriptable) with the same
+  `resolve-image.sh` script targeted mode uses. Full detail — the channel-resolution step, the exact
+  "last-reply-then-next" queue algorithm, and the reply format for both success and failure — is in
+  `references/slack-queue.md`; read it before running this branch. Short version:
+
+  1. Resolve the channel (by name if given, else the pending default — see the channel-setup note
+     above) and read its history.
+  2. Find the newest message that already has a completion reply, then take the **next** message
+     after it — not the oldest unreplied message overall (see the reference for why this distinction
+     matters). If there's no next message, there's nothing to do: end the run, no reply needed.
+  3. Extract the image URL/path from that message's text, normalize it, then resolve it:
+
+     ```bash
+     REF="$(.claude/skills/update-docs-screenshots/scripts/normalize-image-ref.sh "$RAW_TEXT")"
+     eval "$(.claude/skills/update-docs-screenshots/scripts/resolve-image.sh "$REF" "$DOCS")"
+     ```
+
+  4. **A nonzero exit from `resolve-image.sh` does not just end the run here — reply in-thread with
+     `❌ Errored: <the script's stderr reason>` first**, so the next invocation knows this message was
+     attempted and moves on to the one after it. This is the one place targeted mode's "just end the
+     run" instruction isn't sufficient by itself.
+
+## Step 4 — Confirm the matching instance is up
+
+The version comes from the chosen image's docs path (`17/...` → v17, `18/...` → v18) — the `$VERSION`
+resolved in Step 3. Checking the port, starting the instance if needed, and waiting for it to be
+ready is pure mechanics, so it's scripted:
 
 ```bash
-lsof -nP -iTCP:44322 -sTCP:LISTEN   # v17
-lsof -nP -iTCP:44327 -sTCP:LISTEN   # v18
-# if nothing is listening, start it (run in its own terminal / background):
-cd "$HARNESS/demo" && dotnet run --project v18
+.claude/skills/update-docs-screenshots/scripts/ensure-instance-up.sh "$VERSION" "$HARNESS"
 ```
 
-On first boot, transient `SQLite Error 14: unable to open database file` lines are expected — wait
-for `Now listening on:`.
+It returns immediately if the port's already listening; otherwise it starts `dotnet run` in the
+background (log at `/tmp/umbraco-demo-v<version>.log`, never inside the repo) and blocks until `Now
+listening on:` appears or it times out (default 90s — pass a third argument to change it). Transient
+`SQLite Error 14: unable to open database file` lines on first boot are expected and already handled
+by the script; a nonzero exit means it genuinely timed out — check the log.
 
-## Step 2 — Explore the documentation for candidates (one at a time)
+## Step 5 — Understand what the image depicts
 
-This is the core of the skill. Work through `$DOCS/<version>/umbraco-cms/**` only.
-
-1. Read the articles (`.md` / `README.md`) and look at the backoffice screenshots they reference.
-   Images live in flat `.gitbook/assets/` folders (or legacy `images/` folders) beside the content.
-   Read the PNGs directly to judge them.
-2. **Detect the outdated ones by the pre-v14 AngularJS signature:**
-   - Circular Umbraco logo, top-left.
-   - Horizontal coloured section tabs across the top (Content / Media / Settings / … as tabs).
-   - A `Forms` section tab.
-   - Old grey tree styling and old workspace chrome.
-   Any of these means the shot predates the Bellissima redesign and is outdated for v17/v18.
-   (The current UI has a dark left rail of section icons, a light tree panel, and Lit web-component
-   workspaces.)
-3. **Surface a single best candidate** — the image plus the article that uses it — and confirm with
-   the user before capturing. Confirm it is locally reproducible (a CMS backoffice screen, not a
-   Cloud/Deploy dialog and not an add-on product).
-4. Choose **one** candidate for this run and take only that one forward. This run ends when its PR is
-   open (Step 8) — any other candidates are left for a future invocation.
-
-## Step 3 — Understand what the image depicts
-
-Find where the image is used and what screen/state it shows, so you know where to navigate:
+Find where the image is used and what screen/state it shows, so you know where to navigate. In
+targeted and Slack mode the filename is `$(basename "$IMG")` — this grep is how you find the
+article(s) that reference it, since you were given the image rather than the article:
 
 ```bash
 cd "$DOCS"
 grep -rn "<image-filename>" --include='*.md' <version>/umbraco-cms/
 ```
 
+If nothing references it, say so — the image may be orphaned, and refreshing it changes nothing on
+the site. Ask whether to continue.
+
 Read the surrounding markdown for the feature, screen, tab, and any specific content/state shown.
 Optionally open the rendered page on `docs.umbraco.com` for context. Note the target: which section
 (content / media / settings / …), which tree node, which workspace tab, and whether a menu or modal
 is open.
 
-## Step 4 — Determine target dimensions
+## Step 6 — Determine target dimensions
 
-Read the original's pixel size so the capture can match it:
+Read the original's pixel size so the capture can match it — command and sizing guidance in
+`references/capture-workflow.md`.
 
-```bash
-sips -g pixelWidth -g pixelHeight <path-to-original.png>
-```
+## Step 7 — Use Playwright to navigate to that area and recreate the shot
 
-There is no single docs standard — many tutorial shots are ~800px wide, full-window backoffice shots
-run ~1450–1900px, some are retina (2800+). Feed the original's size into the capture config (Step 5).
-
-## Step 5 — Use Playwright to navigate to that area and recreate the shot
-
-The capture is Playwright-driven end to end. Copy the template into `tests/`, edit its clearly-marked
-config block, and drive the running instance to the **exact** screen the original showed before
-capturing.
-
-```bash
-cp "$HARNESS/.claude/skills/update-docs-screenshots/assets/capture-template.spec.ts" \
-   "$HARNESS/tests/capture-<name>.spec.ts"
-```
+The capture is Playwright-driven end to end: copy the template matching `$VERSION` (there's one per
+CMS major — each imports the matching helper version), edit its config block, drive the instance to
+the exact screen from Step 5 preferring `umbracoUi` helpers over hand-rolled locators, and capture.
+The config knobs, the `umbracoUi` navigation methods, the explore-spec fallback for uncovered
+screens, and the run command are all in `references/capture-workflow.md`.
 
 > **These are temporary, single-run artifacts — not part of the repo.** The copied capture spec, any
 > `tests/explore-*.spec.ts`, and the staged PNG under `screenshots/` exist only to produce this run's
-> image. **Never commit them to the harness repo.** Step 8 deletes them once the docs PR is open.
+> image. **Never commit them to the harness repo.** Step 10 deletes them once the docs PR is open.
 
-Edit the config block at the top of the spec (this is the "make dimensions easy to change" knob):
+## Step 8 — Review
 
-- `BASE` — instance URL (`https://localhost:44322` v17, `https://localhost:44327` v18).
-- `ROUTE` — absolute backoffice path to land on (e.g. `/umbraco/section/content`).
-- `OUTPUT` — staging path under `screenshots/`.
-- `VIEWPORT` — `{ width, height }` CSS pixels.
-- `DEVICE_SCALE_FACTOR` — `1` normally; `2` to match a retina original.
-- `MATCH_MODE` — `'viewport'` (final size = viewport × scale) or `'exact'` (post-crop/resize to the
-  original's exact pixels in Step 6).
-- `CLIP` — optional `{ x, y, width, height }` region, or leave `null` for the whole viewport.
-- `navigate(page)` — the navigation steps: expand tree, open a node, switch a workspace tab, open a
-  menu/modal — whatever reaches the area from Step 3.
+Confirm the capture matches the original before moving on — verification steps and the crop/resize
+commands are in `references/capture-workflow.md`. If the screen or content is wrong, adjust and
+re-run Step 7.
 
-The spec logs in via `umbracoApi` (Management API — no UI typing), `page.goto`s the absolute `ROUTE`,
-runs `navigate()`, waits for `umb-app` + `networkidle`, seeds deterministic content via `umbracoApi`
-if the shot needs specific data, then screenshots to `OUTPUT`.
-
-Run it (pass `URL` explicitly — see Gotchas):
-
-```bash
-cd "$HARNESS"
-URL=https://localhost:44327 npx playwright test tests/capture-<name>.spec.ts --project=chromium
-```
-
-**Work out routes/selectors with Playwright itself — not claude-in-chrome.** Write a throwaway
-`tests/explore-*.spec.ts` that logs in, navigates, and dumps a shadow-DOM-piercing snapshot of
-visible actionable elements (walk the DOM, recursing into every `el.shadowRoot`, and print
-`tag[role] "label"`). Playwright's own locators already pierce open shadow DOM, so
-`getByRole`/`getByText` work across web-component boundaries. Iterate the explore spec until you know
-the exact clicks, then bake them into the capture spec. Delete the explore spec afterwards.
-
-## Step 6 — Review
-
-- Read the new capture next to the original and confirm it shows the **same screen** in the current
-  UI (right section, node, tab, state).
-- Verify dimensions: `sips -g pixelWidth -g pixelHeight screenshots/<name>.png`.
-- If `MATCH_MODE='exact'` and the size differs, crop/resize to the original's exact W×H:
-  ```bash
-  sips -c <height> <width> screenshots/<name>.png        # crop to HxW (centered)
-  # or: sips -z <height> <width> screenshots/<name>.png   # resize to HxW
-  ```
-- If the screen or content is wrong, adjust `navigate()` / seeding and re-run Step 5.
-
-## Step 7 — Replace the asset and open the PR
+## Step 9 — Replace the asset and open the PR
 
 In the **docs repo**, on a feature branch, replace the asset in place (keep the exact path and
 filename so every `.md` reference keeps working), then push and open a draft PR:
@@ -263,8 +284,11 @@ Notes:
   future run also edits `.md`, run `vale <changed.md>` and fix any errors before pushing.
 - GitBook builds a preview per push; the PR checks include a `docs.umbraco.com` revision link — return
   it plus the PR URL to the user once it's built.
+- **Slack mode:** once `gh pr create` returns the PR URL, reply in-thread to the source message with
+  `✅ PR: <pr-url>` right away — don't wait until Step 10. That reply is the durable record the next
+  invocation's queue algorithm depends on.
 
-## Step 8 — Clean up temp artifacts, then stop (one PR per run)
+## Step 10 — Clean up temp artifacts, then stop (one PR per run)
 
 First, delete this run's temporary artifacts from the harness repo — they are not part of it and must
 never be committed:
@@ -276,43 +300,23 @@ git status --short   # confirm the harness repo is clean
 ```
 
 Then **the run is complete.** Report the PR (and preview link) to the user and stop.
-Do not loop back to Step 2, do not scan for more candidates, and do not open a second PR in this run.
-Each invocation handles exactly one image. On a schedule, the next run will refresh the next
-screenshot — but only after this PR is merged/closed, thanks to the Step 0.5 guard, so reviewers are
-never handed a pile of screenshot PRs at once.
+Do not loop back to Step 3, do not scan for more candidates, and do not open a second PR in this run.
+**Each invocation handles exactly one image, in all three modes** — in targeted mode that is the
+image you were given; in Slack mode that is the one message the queue algorithm picked; refreshing
+another means invoking the skill again (with its path, or letting Slack mode pick the next request).
+
+Pacing differs by mode: scheduled discovery and Slack runs refresh the next screenshot only after
+this PR is merged/closed (the Step 2 hard stop), so reviewers are never handed a pile of screenshot
+PRs at once. Targeted runs are not paced — you chose to open this one.
+
+If you're finishing in Slack mode, double-check the completion reply actually landed before
+reporting done — a missing reply means the next invocation will pick the same message again.
 
 The only durable output of a run lives in the **docs repo** (the committed asset on the PR branch).
 The harness repo should be left exactly as it was found — clean.
 
 ## Gotchas
 
-- **Stale port `44343`.** `playwright.config.ts` `baseURL`/`process.env.URL` default to a dead
-  instance. Always pass `URL=https://localhost:443xx` on the command line **and** navigate with
-  absolute URLs in the spec, or the browser silently hits the wrong/dead site while API login still
-  "succeeds". The template already reads `process.env.URL` and uses absolute URLs.
-- **Preserve the filename.** Docs reference assets by filename; replacing in place keeps every
-  reference valid and avoids editing markdown. Only rename/move if you also add a redirect and update
-  references (out of scope for a straight refresh).
-- **`umbraco-cms` only.** Skip the cloud set and all add-on products (see Scope). If a shot can only
-  exist in Cloud/Deploy or an add-on, it is not a candidate.
-- **Self-signed certs.** `ignoreHTTPSErrors: true` is already set in `playwright.config.ts`.
-- **Instance must be running** before Playwright runs (Step 1).
-
-### Backoffice-driving gotchas (learned in real runs)
-
-- **Use native Playwright clicks for tree/router navigation — they are trusted.** A synthetic click
-  from `page.evaluate(() => el.click())` is ignored by the SPA router and the tree, so nothing
-  navigates. Use `page.getByRole('link'/'button', { name }).click()` instead. (Fine to *walk* the
-  shadow DOM in `page.evaluate` to read state — just don't click through it.)
-- **Duplicate labels → strict-mode violations.** Several controls share a label (e.g. two `Insert`
-  buttons). Scope the locator (`page.locator('#insert-button').getByRole('button', { name: 'Insert' })`)
-  or use `.first()`.
-- **Modals render in a portal and screenshots can lag.** After opening a modal, wait on a distinctive
-  action that only exists once it's live (e.g. its `Submit` button `.waitFor({ state: 'visible' })`)
-  then a short `waitForTimeout` to settle, rather than asserting on title text.
-- **`Error refreshing access token, performing full re-login.` is normal.** The `umbracoApi` fixture
-  logs this on a cold start; it is not a failure.
-- **Fresh DB content is unpublished.** Query/preview screens can show empty results ("0 published
-  items returned"). If the shot needs populated data, publish content via `umbracoApi` first.
-- **Starter Kit template hierarchy (v18):** templates nest under `_Master` (there is no top-level
-  `Home` template). Expand `Templates`, then `_Master`, to reach child templates.
+Instance/port quirks and backoffice-driving lessons learned from real runs are collected in
+`references/gotchas.md`. Skim it before Step 4 (instance) and Step 7 (capture), and consult it
+directly if something doesn't behave as expected.
