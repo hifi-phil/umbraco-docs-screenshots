@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Count open update-docs-screenshots PRs and apply the reviewer-load guard (Step 2).
 #
-# Usage: check-pr-guard.sh <discovery|targeted> <fork-owner> [max-open]
+# Usage: check-pr-guard.sh <discovery|targeted|slack> <fork-owner> [max-open]
 #
 # Exit codes:
 #   0 — proceed (guard not tripped, or targeted mode where it's only a warning)
-#   1 — STOP: discovery mode and the guard tripped. End the run; do not explore, capture, or open
-#       anything.
+#   1 — STOP: discovery or slack mode and the guard tripped. End the run; do not explore, capture,
+#       resolve a Slack message, or open anything.
 #   2 — bad arguments
 #
 # Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 9 — keep
@@ -18,12 +18,15 @@ MODE="${1:-}"
 FORK_OWNER="${2:-}"
 MAX_OPEN="${3:-1}"
 
-if [ "$MODE" != "discovery" ] && [ "$MODE" != "targeted" ]; then
-  echo "Usage: check-pr-guard.sh <discovery|targeted> <fork-owner> [max-open]" >&2
-  exit 2
-fi
+case "$MODE" in
+  discovery|targeted|slack) ;;
+  *)
+    echo "Usage: check-pr-guard.sh <discovery|targeted|slack> <fork-owner> [max-open]" >&2
+    exit 2
+    ;;
+esac
 if [ -z "$FORK_OWNER" ]; then
-  echo "Usage: check-pr-guard.sh <discovery|targeted> <fork-owner> [max-open]" >&2
+  echo "Usage: check-pr-guard.sh <discovery|targeted|slack> <fork-owner> [max-open]" >&2
   exit 2
 fi
 
@@ -38,8 +41,8 @@ if [ "$OPEN" -ge "$MAX_OPEN" ]; then
     --json number,headRefName,url \
     -q '.[] | select(.headRefName | startswith("update-screenshot-")) | "  #\(.number)  \(.url)"'
 
-  if [ "$MODE" = "discovery" ]; then
-    echo "STOP: reviewer-load guard tripped in discovery mode — end the run now." >&2
+  if [ "$MODE" = "discovery" ] || [ "$MODE" = "slack" ]; then
+    echo "STOP: reviewer-load guard tripped in $MODE mode — end the run now." >&2
     exit 1
   else
     echo "WARN: targeted mode — this run will stack another screenshot PR on top of the above." >&2

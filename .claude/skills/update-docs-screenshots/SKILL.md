@@ -4,12 +4,15 @@ description: >-
   Replaces outdated Umbraco backoffice screenshots in the docs with fresh captures from a running
   local instance, then opens a docs PR. Takes an optional image path to recapture a specific
   screenshot; with no argument it explores the UmbracoDocs repo one article at a time for shots that
-  still show the old pre-v14 AngularJS UI and picks one itself. Either way it uses Playwright to
-  drive the matching demo instance (v17 or v18) to that exact backoffice area, recaptures the shot at
-  configurable dimensions, drops it in place, and opens a draft docs PR. Use when the user wants to
-  find, refresh, or update outdated backoffice screenshots in the documentation. Trigger on "update
-  docs screenshots", "find outdated screenshots", "refresh backoffice screenshots", "update this
-  screenshot", "recapture <path>.png", "recapture the screenshot for <article>".
+  still show the old pre-v14 AngularJS UI and picks one itself; or in "slack" mode it works a shared
+  Slack channel as a request queue, processing the next unhandled image link and replying in-thread
+  with the resulting PR or error. Either way it uses Playwright to drive the matching demo instance
+  (v17 or v18) to that exact backoffice area, recaptures the shot at configurable dimensions, drops
+  it in place, and opens a draft docs PR. Use when the user wants to find, refresh, or update
+  outdated backoffice screenshots in the documentation, or to work through a Slack channel of
+  screenshot requests. Trigger on "update docs screenshots", "find outdated screenshots", "refresh
+  backoffice screenshots", "update this screenshot", "recapture <path>.png", "recapture the
+  screenshot for <article>", "process the screenshot requests channel", "work the screenshot queue".
 ---
 
 # Update Docs Screenshots
@@ -30,20 +33,23 @@ needs explanation or heuristics rather than execution, it's a doc in `references
 |---|---|
 | `scripts/resolve-repos.sh` | Step 1 — resolves `$HARNESS`/`$DOCS`/`$FORK_OWNER`, nothing to judge |
 | `scripts/check-pr-guard.sh` | Step 2 — counts open screenshot PRs, applies the guard by mode |
-| `scripts/resolve-image.sh` | Step 3, targeted branch — resolves and validates the supplied path |
+| `scripts/resolve-image.sh` | Step 3, targeted/Slack branches — resolves and validates the image path |
+| `scripts/normalize-image-ref.sh` | Step 3, Slack branch — turns a pasted GitHub URL into the plain path `resolve-image.sh` expects |
 | `scripts/ensure-instance-up.sh` | Step 4 — checks/starts the matching demo instance |
 | `references/image-selection.md` | Step 3, discovery branch — the pre-v14 detection heuristic (judgment, not scriptable) |
+| `references/slack-queue.md` | Step 3, Slack branch — the channel-as-queue algorithm and reply conventions |
 | `references/capture-workflow.md` | Steps 6–8's dimension/config/review mechanics |
 | `references/gotchas.md` | Known quirks — skim before Step 4 and Step 7, or on unexpected behavior |
 
-## Two modes
+## Three modes
 
-The mode is decided by **whether the invocation carried an image path**:
+The mode is decided by **what the invocation carried**:
 
 | Mode | When | PR guard (Step 2) | Choosing the image (Step 3) |
 |---|---|---|---|
 | **Discovery** (default) | no argument — how scheduled runs fire | **hard stop** if a screenshot PR is open | full scan, picks a candidate itself |
 | **Targeted** | an image path was supplied | **warn only**, run continues | resolves the supplied path |
+| **Slack** | invoked as `slack` (or `slack:#channel-name`) | **hard stop** if a screenshot PR is open (also scheduled-style, repeated) | reads a Slack channel as a queue, resolves the next request |
 
 Targeted mode is for local, interactive use — you already know which image is stale, so the scan is
 wasted work and the reviewer-load guard shouldn't block you. Invoke it with a path relative to the
@@ -54,12 +60,28 @@ docs repo root, or an absolute one:
 /update-docs-screenshots /Users/me/Projects/UmbracoDocs/18/umbraco-cms/.../query-builder.png
 ```
 
-Targeted mode relaxes **candidate selection only** — everything else is unchanged, including the
-one-PR-per-run rule above. Steps 4–10 are identical in both modes.
+Slack mode is for a shared request queue — anyone can drop an image link in the channel, and each
+invocation works exactly one of them, replying in-thread with the result:
 
-Discovery mode is designed to run **as a scheduled routine**. To avoid overwhelming the docs PR
-reviewers, successive scheduled runs must not stack up open PRs — Step 2 bails out early if a
-screenshot PR from a previous run is still open.
+```
+/update-docs-screenshots slack
+/update-docs-screenshots slack:#docs-screenshot-requests
+```
+
+> **Channel setup is still pending.** No channel has been created/confirmed yet — until one exists,
+> `slack:#channel-name` must be given explicitly (there's no baked-in default). Once a channel is
+> settled, update `references/slack-queue.md` with it as the default so a bare `slack` works too.
+
+Targeted and Slack mode relax **candidate selection only** — everything else is unchanged, including
+the one-PR-per-run rule above. Steps 4–10 are identical across all three modes, except that Slack
+mode has one extra obligation layered on top: **whatever step ends the run — success or failure —
+reply in the source message's thread before stopping** (Step 3's Slack branch and
+`references/slack-queue.md` spell out the exact reply format; don't let a failed run leave the
+thread silent, or the next invocation has no way to know that message was already attempted).
+
+Discovery and Slack mode are both designed to run **as a scheduled/repeated routine**. To avoid
+overwhelming the docs PR reviewers, successive runs must not stack up open PRs — Step 2 bails out
+early if a screenshot PR from a previous run is still open.
 
 > ## ⛔ Playwright only — never claude-in-chrome
 > All backoffice interaction (logging in, navigating sections, expanding the tree, opening
@@ -115,6 +137,7 @@ Count open screenshot PRs from previous runs before doing any work:
 ```bash
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh discovery "$FORK_OWNER"   # discovery mode
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh targeted "$FORK_OWNER"     # targeted mode
+.claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh slack "$FORK_OWNER"        # Slack mode
 ```
 
 The script prints the open count (and, if any are open, their PR numbers/URLs) and exits:
@@ -122,8 +145,9 @@ The script prints the open count (and, if any are open, their PR numbers/URLs) a
 - **`0`** — proceed to Step 3. In targeted mode this includes the case where the guard tripped but is
   only a warning (printed to stderr) — the user asked for this specific image, so it doesn't stop
   them.
-- **`1`** — **discovery mode only.** The guard tripped: report the already-open PR(s) and **end the
-  run** — nothing to do until a reviewer merges or closes them.
+- **`1`** — **discovery and Slack mode.** The guard tripped: report the already-open PR(s) and **end
+  the run** — nothing to do until a reviewer merges or closes them. In Slack mode this is a silent
+  stop (no message was chosen yet, so there's no thread to reply to).
 
 Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 9 — keep that
 prefix so this guard keeps working.
@@ -131,7 +155,7 @@ prefix so this guard keeps working.
 ## Step 3 — Choose the image for this run
 
 Exactly one image comes out of this step, along with its `$VERSION` (`17` or `18`), which selects the
-instance in Step 4. Follow **one** of the two branches, never both:
+instance in Step 4. Follow **one** of the three branches, never more than one:
 
 - **Targeted mode** (an image path was supplied): resolve and validate it with the script — no
   judgment call needed, so this is deterministic. `$ARG` is the path as the user gave it, docs-relative
@@ -151,6 +175,29 @@ instance in Step 4. Follow **one** of the two branches, never both:
   AngularJS signature and surface one candidate — this needs reading the images and judging them, so
   it isn't scripted; see `references/image-selection.md` for the detection heuristic and selection
   process. Confirm the candidate with the user before capturing.
+- **Slack mode** (invoked as `slack`/`slack:#channel-name`): read the channel as a queue, find the
+  next request, and resolve its image reference the same way targeted mode does. This mixes MCP tool
+  calls (reading/replying to Slack, which only you can do — not scriptable) with the same
+  `resolve-image.sh` script targeted mode uses. Full detail — the channel-resolution step, the exact
+  "last-reply-then-next" queue algorithm, and the reply format for both success and failure — is in
+  `references/slack-queue.md`; read it before running this branch. Short version:
+
+  1. Resolve the channel (by name if given, else the pending default — see the channel-setup note
+     above) and read its history.
+  2. Find the newest message that already has a completion reply, then take the **next** message
+     after it — not the oldest unreplied message overall (see the reference for why this distinction
+     matters). If there's no next message, there's nothing to do: end the run, no reply needed.
+  3. Extract the image URL/path from that message's text, normalize it, then resolve it:
+
+     ```bash
+     REF="$(.claude/skills/update-docs-screenshots/scripts/normalize-image-ref.sh "$RAW_TEXT")"
+     eval "$(.claude/skills/update-docs-screenshots/scripts/resolve-image.sh "$REF" "$DOCS")"
+     ```
+
+  4. **A nonzero exit from `resolve-image.sh` does not just end the run here — reply in-thread with
+     `❌ Errored: <the script's stderr reason>` first**, so the next invocation knows this message was
+     attempted and moves on to the one after it. This is the one place targeted mode's "just end the
+     run" instruction isn't sufficient by itself.
 
 ## Step 4 — Confirm the matching instance is up
 
@@ -171,8 +218,8 @@ by the script; a nonzero exit means it genuinely timed out — check the log.
 ## Step 5 — Understand what the image depicts
 
 Find where the image is used and what screen/state it shows, so you know where to navigate. In
-targeted mode the filename is `$(basename "$IMG")` — this grep is how you find the article(s) that
-reference it, since the user gave you the image rather than the article:
+targeted and Slack mode the filename is `$(basename "$IMG")` — this grep is how you find the
+article(s) that reference it, since you were given the image rather than the article:
 
 ```bash
 cd "$DOCS"
@@ -234,6 +281,9 @@ Notes:
   future run also edits `.md`, run `vale <changed.md>` and fix any errors before pushing.
 - GitBook builds a preview per push; the PR checks include a `docs.umbraco.com` revision link — return
   it plus the PR URL to the user once it's built.
+- **Slack mode:** once `gh pr create` returns the PR URL, reply in-thread to the source message with
+  `✅ PR: <pr-url>` right away — don't wait until Step 10. That reply is the durable record the next
+  invocation's queue algorithm depends on.
 
 ## Step 10 — Clean up temp artifacts, then stop (one PR per run)
 
@@ -248,12 +298,16 @@ git status --short   # confirm the harness repo is clean
 
 Then **the run is complete.** Report the PR (and preview link) to the user and stop.
 Do not loop back to Step 3, do not scan for more candidates, and do not open a second PR in this run.
-**Each invocation handles exactly one image, in both modes** — in targeted mode that is the image you
-were given; refreshing another means invoking the skill again with its path.
+**Each invocation handles exactly one image, in all three modes** — in targeted mode that is the
+image you were given; in Slack mode that is the one message the queue algorithm picked; refreshing
+another means invoking the skill again (with its path, or letting Slack mode pick the next request).
 
-Pacing differs by mode: scheduled discovery runs refresh the next screenshot only after this PR is
-merged/closed (the Step 2 hard stop), so reviewers are never handed a pile of screenshot PRs at
-once. Targeted runs are not paced — you chose to open this one.
+Pacing differs by mode: scheduled discovery and Slack runs refresh the next screenshot only after
+this PR is merged/closed (the Step 2 hard stop), so reviewers are never handed a pile of screenshot
+PRs at once. Targeted runs are not paced — you chose to open this one.
+
+If you're finishing in Slack mode, double-check the completion reply actually landed before
+reporting done — a missing reply means the next invocation will pick the same message again.
 
 The only durable output of a run lives in the **docs repo** (the committed asset on the PR branch).
 The harness repo should be left exactly as it was found — clean.
