@@ -3,13 +3,17 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test:v17": "URL=https://localhost:44322 playwright test --project=umbraco-17",
+    "test:v18": "URL=https://localhost:44327 playwright test --project=umbraco-18"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.1",
-    "@umbraco-cms/acceptance-test-helpers": "^17.5.3"
+    "@umbraco-cms/acceptance-test-helpers": "^17.5.3",
+    "@umbraco-cms/acceptance-test-helpers-v18": "npm:@umbraco-cms/acceptance-test-helpers@18.0.2"
   }
 }
