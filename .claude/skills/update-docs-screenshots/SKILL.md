@@ -36,6 +36,7 @@ needs explanation or heuristics rather than execution, it's a doc in `references
 | `scripts/resolve-image.sh` | Step 3, targeted/Slack branches — resolves and validates the image path |
 | `scripts/normalize-image-ref.sh` | Step 3, Slack branch — turns a pasted GitHub URL into the plain path `resolve-image.sh` expects |
 | `scripts/ensure-instance-up.sh` | Step 4 — checks/starts the matching demo instance |
+| `scripts/list-stale-candidates.sh` | Step 3, discovery branch — bounds ~3,800 images down to a short prioritized shortlist |
 | `references/image-selection.md` | Step 3, discovery branch — the pre-v14 detection heuristic (judgment, not scriptable) |
 | `references/slack-queue.md` | Step 3, Slack branch — the channel-as-queue algorithm and reply conventions |
 | `references/capture-workflow.md` | Steps 6–8's dimension/config/review mechanics |
@@ -170,10 +171,13 @@ instance in Step 4. Follow **one** of the three branches, never more than one:
   `umbraco-cms` scope). Never fall back to discovery or substitute a different image on failure. The
   pre-v14 AngularJS check is **not a gate** here — the user picked this image, so recapturing an
   already-current shot is legitimate.
-- **Discovery mode** (no path supplied): scan `$DOCS/<version>/umbraco-cms/**` for the pre-v14
+- **Discovery mode** (no path supplied): pick a version to scan first — `$VERSION` isn't known yet
+  the way it is in the other two branches (there's no chosen image to derive it from). Default to
+  whichever demo instance is already listening (`lsof -nP -iTCP:44322/-iTCP:44327 -sTCP:LISTEN`); if
+  neither is up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14
   AngularJS signature and surface one candidate — this needs reading the images and judging them, so
-  it isn't scripted; see `references/image-selection.md` for the detection heuristic and selection
-  process. Confirm the candidate with the user before capturing.
+  it isn't scripted; see `references/image-selection.md` for the bounded-shortlist script and the
+  detection heuristic. Confirm the candidate with the user before capturing.
 - **Slack mode** (invoked as `slack`/`slack:#channel-name`): read the channel as a queue, find the
   next request, and resolve its image reference the same way targeted mode does. This mixes MCP tool
   calls (reading/replying to Slack, which only you can do — not scriptable) with the same
