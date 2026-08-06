@@ -1,14 +1,15 @@
 ---
 name: update-docs-screenshots
 description: >-
-  Finds outdated Umbraco backoffice screenshots in the docs and replaces them with fresh captures
-  from a running local instance, then opens a docs PR. Explores the UmbracoDocs repo one article at
-  a time for screenshots that still show the old pre-v14 AngularJS UI, uses Playwright to drive the
-  matching demo instance (v17 or v18) to that exact backoffice area, recaptures the shot at
-  configurable dimensions, drops it in place, and opens a draft docs PR. Use when the
-  user wants to find, refresh, or update outdated backoffice screenshots in the documentation.
-  Trigger on "update docs screenshots", "find outdated screenshots", "refresh backoffice
-  screenshots", "recapture the screenshot for <article>".
+  Replaces outdated Umbraco backoffice screenshots in the docs with fresh captures from a running
+  local instance, then opens a docs PR. Takes an optional image path to recapture a specific
+  screenshot; with no argument it explores the UmbracoDocs repo one article at a time for shots that
+  still show the old pre-v14 AngularJS UI and picks one itself. Either way it uses Playwright to
+  drive the matching demo instance (v17 or v18) to that exact backoffice area, recaptures the shot at
+  configurable dimensions, drops it in place, and opens a draft docs PR. Use when the user wants to
+  find, refresh, or update outdated backoffice screenshots in the documentation. Trigger on "update
+  docs screenshots", "find outdated screenshots", "refresh backoffice screenshots", "update this
+  screenshot", "recapture <path>.png", "recapture the screenshot for <article>".
 ---
 
 # Update Docs Screenshots
@@ -16,13 +17,45 @@ description: >-
 Repeatable process for replacing outdated Umbraco backoffice screenshots in the docs with fresh
 captures of the current ("Bellissima", v14+) UI.
 
-**One run of this skill creates exactly one image PR, then stops.** Pick a single candidate, take it
-all the way through to an open PR (Step 7), and **end the run there** — do not find, capture, or PR a
-second image in the same run. Refreshing another screenshot requires invoking the skill again. Never
-batch.
+**One run of this skill creates exactly one image PR, then stops.** Take the single image for this
+run — given to you or picked in Step 3 — all the way through to an open PR (Step 9), and **end the
+run there** — do not find, capture, or PR a second image in the same run. Refreshing another
+screenshot requires invoking the skill again. Never batch.
 
-This skill is designed to run **as a scheduled routine**. To avoid overwhelming the docs PR
-reviewers, successive scheduled runs must not stack up open PRs — Step 0.5 bails out early if a
+This file carries the step sequence and the decisions at each step. The mechanical detail behind
+several steps — boilerplate scripts, detection heuristics, capture config — lives in `references/`
+and is loaded only when that step is reached:
+
+| Reference file | Read it for |
+|---|---|
+| `references/repo-discovery.md` | Step 1's path-resolution script |
+| `references/image-selection.md` | Step 3's targeted-path resolution and discovery-scan detail |
+| `references/capture-workflow.md` | Steps 6–8's dimension/config/review mechanics |
+| `references/gotchas.md` | Known quirks — skim before Step 4 and Step 7, or on unexpected behavior |
+
+## Two modes
+
+The mode is decided by **whether the invocation carried an image path**:
+
+| Mode | When | PR guard (Step 2) | Choosing the image (Step 3) |
+|---|---|---|---|
+| **Discovery** (default) | no argument — how scheduled runs fire | **hard stop** if a screenshot PR is open | full scan, picks a candidate itself |
+| **Targeted** | an image path was supplied | **warn only**, run continues | resolves the supplied path |
+
+Targeted mode is for local, interactive use — you already know which image is stale, so the scan is
+wasted work and the reviewer-load guard shouldn't block you. Invoke it with a path relative to the
+docs repo root, or an absolute one:
+
+```
+/update-docs-screenshots 18/umbraco-cms/fundamentals/data/defining-content/images/query-builder.png
+/update-docs-screenshots /Users/me/Projects/UmbracoDocs/18/umbraco-cms/.../query-builder.png
+```
+
+Targeted mode relaxes **candidate selection only** — everything else is unchanged, including the
+one-PR-per-run rule above. Steps 4–10 are identical in both modes.
+
+Discovery mode is designed to run **as a scheduled routine**. To avoid overwhelming the docs PR
+reviewers, successive scheduled runs must not stack up open PRs — Step 2 bails out early if a
 screenshot PR from a previous run is still open.
 
 > ## ⛔ Playwright only — never claude-in-chrome
@@ -30,22 +63,21 @@ screenshot PR from a previous run is still open.
 > workspaces/modals, and capturing) is done with **Playwright**. **Do NOT use the
 > `mcp__claude-in-chrome__*` tools or the `umbraco-chrome-navigation` skill** for any part of this —
 > not for exploration, not for capture. Route/selector discovery is a throwaway Playwright
-> `explore-*.spec.ts` (Step 5). If you catch yourself about to open a Chrome tab, stop and write a
+> `explore-*.spec.ts` (Step 7). If you catch yourself about to open a Chrome tab, stop and write a
 > Playwright spec instead.
 
 ## Repos, instances, scope
 
 | | |
 |---|---|
-| Capture harness (`$HARNESS`) | this repo (contains this skill, `demo/`, `tests/`) — resolved in Step 0 |
-| Docs repo (`$DOCS`) | the UmbracoDocs checkout — discovered or asked for in Step 0 |
+| Capture harness (`$HARNESS`) | this repo (contains this skill, `demo/`, `tests/`) — resolved in Step 1 |
+| Docs repo (`$DOCS`) | the UmbracoDocs checkout — discovered or asked for in Step 1 |
 | v17 instance | `$HARNESS/demo/v17` → `https://localhost:44322/umbraco` |
 | v18 instance | `$HARNESS/demo/v18` → `https://localhost:44327/umbraco` |
 | Admin login | `admin@admin.com` / `1234567890` (read from env by the helper) |
 
 Paths are **not** hardcoded — the skill is machine-agnostic. `$HARNESS`, `$DOCS`, and `$FORK_OWNER`
-are established in Step 0 and used throughout. Ports come from `demo/*/Properties/launchSettings.json`
-in this repo, so they are stable across machines.
+are established in Step 1 and used throughout.
 
 **Scope is `umbraco-cms` only.** The local demo instances are a vanilla CMS, so only CMS backoffice
 screens are reproducible. **Skip everything else — do not treat these as candidates:**
@@ -59,51 +91,19 @@ screens are reproducible. **Skip everything else — do not treat these as candi
 
 Effective candidate scope: **`$DOCS/<version>/umbraco-cms/**` only** (version = `17` or `18`).
 
-## Step 0 — Locate the repos (machine-agnostic)
+## Step 1 — Locate the repos (machine-agnostic)
 
-Establish the two repo paths and the fork owner before anything else. **Do not hardcode paths.**
+Resolve `$HARNESS`, `$DOCS`, and `$FORK_OWNER` before anything else — **do not hardcode paths**. Run
+the resolution script in `references/repo-discovery.md`.
 
-```bash
-# Capture harness = the repo that contains this skill (normally your working directory).
-HARNESS="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-
-# Docs repo: look as a sibling first, then a couple of common roots. A real checkout has a
-# .gitbook.yaml at its root and version folders like 17/ and 18/.
-DOCS=""
-for c in \
-  "$(dirname "$HARNESS")"/UmbracoDocs "$(dirname "$HARNESS")"/umbraco-docs \
-  "$(dirname "$HARNESS")"/docs "$HOME"/Projects/UmbracoDocs "$HOME"/UmbracoDocs; do
-  if [ -f "$c/.gitbook.yaml" ] && [ -d "$c/18" ]; then DOCS="$c"; break; fi
-done
-# Bounded fallback search if still not found.
-if [ -z "$DOCS" ]; then
-  DOCS="$(find "$HOME" -maxdepth 5 -name .gitbook.yaml 2>/dev/null \
-          | while read -r f; do d="$(dirname "$f")"; \
-              git -C "$d" remote -v 2>/dev/null | grep -qi 'UmbracoDocs' && echo "$d" && break; done)"
-fi
-
-echo "HARNESS = $HARNESS"
-echo "DOCS    = ${DOCS:-NOT FOUND}"
-```
-
-- If `$DOCS` is empty, **ask the user for the absolute path to their UmbracoDocs checkout** and use
-  that. Do not guess or proceed without it.
-- Derive the fork owner (head namespace for the PR) from the docs repo's `origin` remote — never
-  assume a username:
-
-```bash
-FORK_OWNER="$(gh repo view "$DOCS" --json owner -q .owner.login 2>/dev/null \
-  || git -C "$DOCS" remote get-url origin | sed -E 's#.*[:/]([^/]+)/[^/]+(\.git)?$#\1#')"
-echo "FORK_OWNER = $FORK_OWNER"
-```
+If `$DOCS` comes back empty, **ask the user for the absolute path to their UmbracoDocs checkout**.
+Do not guess or proceed without it.
 
 Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
-## Step 0.5 — Don't stack PRs (scheduled-run guard)
+## Step 2 — Don't stack PRs (scheduled-run guard)
 
-Because this runs on a schedule, check how many screenshot PRs from previous runs are still open
-before doing any work. If the limit is already reached, **stop immediately** — do not explore, capture,
-or open anything. This keeps reviewer load bounded.
+Check how many screenshot PRs from previous runs are still open before doing any work:
 
 ```bash
 MAX_OPEN=1   # max concurrent open screenshot PRs from this skill; raise only if reviewers can absorb more
@@ -113,15 +113,32 @@ OPEN=$(gh pr list --repo umbraco/UmbracoDocs --author "$FORK_OWNER" --state open
 echo "Open screenshot PRs: $OPEN (limit $MAX_OPEN)"
 ```
 
-- Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 7 — keep that
-  prefix so this guard keeps working.
-- If `OPEN >= MAX_OPEN`, report the already-open PR(s) and **end the run** (nothing to do until a
-  reviewer merges or closes them). Otherwise continue to Step 1.
+Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 9 — keep that
+prefix so this guard keeps working.
 
-## Step 1 — Pick a version and confirm the instance is up
+- **Discovery mode:** if `OPEN >= MAX_OPEN`, report the already-open PR(s) and **end the run**
+  (nothing to do until a reviewer merges or closes them). Otherwise continue to Step 3.
+- **Targeted mode:** run the same check for information only. If `OPEN >= MAX_OPEN`, list the open
+  PR(s) and warn that this run will stack another screenshot PR on top of them — then **continue** to
+  Step 3. The user asked for this specific image, so the guard does not stop them.
 
-The version comes from the candidate's docs path (`17/...` → v17, `18/...` → v18). If starting from a
-version rather than a specific image, ask or default to the one whose instance is already running.
+## Step 3 — Choose the image for this run
+
+Exactly one image comes out of this step, along with its `$VERSION` (`17` or `18`), which selects the
+instance in Step 4. Follow **one** of the two branches, never both — see `references/image-selection.md`
+for the full detail of each:
+
+- **Targeted mode** (an image path was supplied): resolve and validate it. Any validation failure
+  **ends the run** with the specific reason; never fall back to discovery or substitute a different
+  image. The pre-v14 AngularJS check is **not a gate** here — the user picked this image, so
+  recapturing an already-current shot is legitimate.
+- **Discovery mode** (no path supplied): scan `$DOCS/<version>/umbraco-cms/**` for the pre-v14
+  AngularJS signature and surface one candidate. Confirm it with the user before capturing.
+
+## Step 4 — Confirm the matching instance is up
+
+The version comes from the chosen image's docs path (`17/...` → v17, `18/...` → v18) — the `$VERSION`
+resolved in Step 3.
 
 Check the port, start the instance if needed, wait for `Now listening on:`:
 
@@ -135,111 +152,47 @@ cd "$HARNESS/demo" && dotnet run --project v18
 On first boot, transient `SQLite Error 14: unable to open database file` lines are expected — wait
 for `Now listening on:`.
 
-## Step 2 — Explore the documentation for candidates (one at a time)
+## Step 5 — Understand what the image depicts
 
-This is the core of the skill. Work through `$DOCS/<version>/umbraco-cms/**` only.
-
-1. Read the articles (`.md` / `README.md`) and look at the backoffice screenshots they reference.
-   Images live in flat `.gitbook/assets/` folders (or legacy `images/` folders) beside the content.
-   Read the PNGs directly to judge them.
-2. **Detect the outdated ones by the pre-v14 AngularJS signature:**
-   - Circular Umbraco logo, top-left.
-   - Horizontal coloured section tabs across the top (Content / Media / Settings / … as tabs).
-   - A `Forms` section tab.
-   - Old grey tree styling and old workspace chrome.
-   Any of these means the shot predates the Bellissima redesign and is outdated for v17/v18.
-   (The current UI has a dark left rail of section icons, a light tree panel, and Lit web-component
-   workspaces.)
-3. **Surface a single best candidate** — the image plus the article that uses it — and confirm with
-   the user before capturing. Confirm it is locally reproducible (a CMS backoffice screen, not a
-   Cloud/Deploy dialog and not an add-on product).
-4. Choose **one** candidate for this run and take only that one forward. This run ends when its PR is
-   open (Step 8) — any other candidates are left for a future invocation.
-
-## Step 3 — Understand what the image depicts
-
-Find where the image is used and what screen/state it shows, so you know where to navigate:
+Find where the image is used and what screen/state it shows, so you know where to navigate. In
+targeted mode the filename is `$(basename "$IMG")` — this grep is how you find the article(s) that
+reference it, since the user gave you the image rather than the article:
 
 ```bash
 cd "$DOCS"
 grep -rn "<image-filename>" --include='*.md' <version>/umbraco-cms/
 ```
 
+If nothing references it, say so — the image may be orphaned, and refreshing it changes nothing on
+the site. Ask whether to continue.
+
 Read the surrounding markdown for the feature, screen, tab, and any specific content/state shown.
 Optionally open the rendered page on `docs.umbraco.com` for context. Note the target: which section
 (content / media / settings / …), which tree node, which workspace tab, and whether a menu or modal
 is open.
 
-## Step 4 — Determine target dimensions
+## Step 6 — Determine target dimensions
 
-Read the original's pixel size so the capture can match it:
+Read the original's pixel size so the capture can match it — command and sizing guidance in
+`references/capture-workflow.md`.
 
-```bash
-sips -g pixelWidth -g pixelHeight <path-to-original.png>
-```
+## Step 7 — Use Playwright to navigate to that area and recreate the shot
 
-There is no single docs standard — many tutorial shots are ~800px wide, full-window backoffice shots
-run ~1450–1900px, some are retina (2800+). Feed the original's size into the capture config (Step 5).
-
-## Step 5 — Use Playwright to navigate to that area and recreate the shot
-
-The capture is Playwright-driven end to end. Copy the template into `tests/`, edit its clearly-marked
-config block, and drive the running instance to the **exact** screen the original showed before
-capturing.
-
-```bash
-cp "$HARNESS/.claude/skills/update-docs-screenshots/assets/capture-template.spec.ts" \
-   "$HARNESS/tests/capture-<name>.spec.ts"
-```
+The capture is Playwright-driven end to end: copy the template, edit its config block, drive the
+instance to the exact screen from Step 5, and capture. The config knobs, the explore-spec technique
+for finding routes/selectors, and the run command are all in `references/capture-workflow.md`.
 
 > **These are temporary, single-run artifacts — not part of the repo.** The copied capture spec, any
 > `tests/explore-*.spec.ts`, and the staged PNG under `screenshots/` exist only to produce this run's
-> image. **Never commit them to the harness repo.** Step 8 deletes them once the docs PR is open.
+> image. **Never commit them to the harness repo.** Step 10 deletes them once the docs PR is open.
 
-Edit the config block at the top of the spec (this is the "make dimensions easy to change" knob):
+## Step 8 — Review
 
-- `BASE` — instance URL (`https://localhost:44322` v17, `https://localhost:44327` v18).
-- `ROUTE` — absolute backoffice path to land on (e.g. `/umbraco/section/content`).
-- `OUTPUT` — staging path under `screenshots/`.
-- `VIEWPORT` — `{ width, height }` CSS pixels.
-- `DEVICE_SCALE_FACTOR` — `1` normally; `2` to match a retina original.
-- `MATCH_MODE` — `'viewport'` (final size = viewport × scale) or `'exact'` (post-crop/resize to the
-  original's exact pixels in Step 6).
-- `CLIP` — optional `{ x, y, width, height }` region, or leave `null` for the whole viewport.
-- `navigate(page)` — the navigation steps: expand tree, open a node, switch a workspace tab, open a
-  menu/modal — whatever reaches the area from Step 3.
+Confirm the capture matches the original before moving on — verification steps and the crop/resize
+commands are in `references/capture-workflow.md`. If the screen or content is wrong, adjust and
+re-run Step 7.
 
-The spec logs in via `umbracoApi` (Management API — no UI typing), `page.goto`s the absolute `ROUTE`,
-runs `navigate()`, waits for `umb-app` + `networkidle`, seeds deterministic content via `umbracoApi`
-if the shot needs specific data, then screenshots to `OUTPUT`.
-
-Run it (pass `URL` explicitly — see Gotchas):
-
-```bash
-cd "$HARNESS"
-URL=https://localhost:44327 npx playwright test tests/capture-<name>.spec.ts --project=chromium
-```
-
-**Work out routes/selectors with Playwright itself — not claude-in-chrome.** Write a throwaway
-`tests/explore-*.spec.ts` that logs in, navigates, and dumps a shadow-DOM-piercing snapshot of
-visible actionable elements (walk the DOM, recursing into every `el.shadowRoot`, and print
-`tag[role] "label"`). Playwright's own locators already pierce open shadow DOM, so
-`getByRole`/`getByText` work across web-component boundaries. Iterate the explore spec until you know
-the exact clicks, then bake them into the capture spec. Delete the explore spec afterwards.
-
-## Step 6 — Review
-
-- Read the new capture next to the original and confirm it shows the **same screen** in the current
-  UI (right section, node, tab, state).
-- Verify dimensions: `sips -g pixelWidth -g pixelHeight screenshots/<name>.png`.
-- If `MATCH_MODE='exact'` and the size differs, crop/resize to the original's exact W×H:
-  ```bash
-  sips -c <height> <width> screenshots/<name>.png        # crop to HxW (centered)
-  # or: sips -z <height> <width> screenshots/<name>.png   # resize to HxW
-  ```
-- If the screen or content is wrong, adjust `navigate()` / seeding and re-run Step 5.
-
-## Step 7 — Replace the asset and open the PR
+## Step 9 — Replace the asset and open the PR
 
 In the **docs repo**, on a feature branch, replace the asset in place (keep the exact path and
 filename so every `.md` reference keeps working), then push and open a draft PR:
@@ -264,7 +217,7 @@ Notes:
 - GitBook builds a preview per push; the PR checks include a `docs.umbraco.com` revision link — return
   it plus the PR URL to the user once it's built.
 
-## Step 8 — Clean up temp artifacts, then stop (one PR per run)
+## Step 10 — Clean up temp artifacts, then stop (one PR per run)
 
 First, delete this run's temporary artifacts from the harness repo — they are not part of it and must
 never be committed:
@@ -276,43 +229,19 @@ git status --short   # confirm the harness repo is clean
 ```
 
 Then **the run is complete.** Report the PR (and preview link) to the user and stop.
-Do not loop back to Step 2, do not scan for more candidates, and do not open a second PR in this run.
-Each invocation handles exactly one image. On a schedule, the next run will refresh the next
-screenshot — but only after this PR is merged/closed, thanks to the Step 0.5 guard, so reviewers are
-never handed a pile of screenshot PRs at once.
+Do not loop back to Step 3, do not scan for more candidates, and do not open a second PR in this run.
+**Each invocation handles exactly one image, in both modes** — in targeted mode that is the image you
+were given; refreshing another means invoking the skill again with its path.
+
+Pacing differs by mode: scheduled discovery runs refresh the next screenshot only after this PR is
+merged/closed (the Step 2 hard stop), so reviewers are never handed a pile of screenshot PRs at
+once. Targeted runs are not paced — you chose to open this one.
 
 The only durable output of a run lives in the **docs repo** (the committed asset on the PR branch).
 The harness repo should be left exactly as it was found — clean.
 
 ## Gotchas
 
-- **Stale port `44343`.** `playwright.config.ts` `baseURL`/`process.env.URL` default to a dead
-  instance. Always pass `URL=https://localhost:443xx` on the command line **and** navigate with
-  absolute URLs in the spec, or the browser silently hits the wrong/dead site while API login still
-  "succeeds". The template already reads `process.env.URL` and uses absolute URLs.
-- **Preserve the filename.** Docs reference assets by filename; replacing in place keeps every
-  reference valid and avoids editing markdown. Only rename/move if you also add a redirect and update
-  references (out of scope for a straight refresh).
-- **`umbraco-cms` only.** Skip the cloud set and all add-on products (see Scope). If a shot can only
-  exist in Cloud/Deploy or an add-on, it is not a candidate.
-- **Self-signed certs.** `ignoreHTTPSErrors: true` is already set in `playwright.config.ts`.
-- **Instance must be running** before Playwright runs (Step 1).
-
-### Backoffice-driving gotchas (learned in real runs)
-
-- **Use native Playwright clicks for tree/router navigation — they are trusted.** A synthetic click
-  from `page.evaluate(() => el.click())` is ignored by the SPA router and the tree, so nothing
-  navigates. Use `page.getByRole('link'/'button', { name }).click()` instead. (Fine to *walk* the
-  shadow DOM in `page.evaluate` to read state — just don't click through it.)
-- **Duplicate labels → strict-mode violations.** Several controls share a label (e.g. two `Insert`
-  buttons). Scope the locator (`page.locator('#insert-button').getByRole('button', { name: 'Insert' })`)
-  or use `.first()`.
-- **Modals render in a portal and screenshots can lag.** After opening a modal, wait on a distinctive
-  action that only exists once it's live (e.g. its `Submit` button `.waitFor({ state: 'visible' })`)
-  then a short `waitForTimeout` to settle, rather than asserting on title text.
-- **`Error refreshing access token, performing full re-login.` is normal.** The `umbracoApi` fixture
-  logs this on a cold start; it is not a failure.
-- **Fresh DB content is unpublished.** Query/preview screens can show empty results ("0 published
-  items returned"). If the shot needs populated data, publish content via `umbracoApi` first.
-- **Starter Kit template hierarchy (v18):** templates nest under `_Master` (there is no top-level
-  `Home` template). Expand `Templates`, then `_Master`, to reach child templates.
+Instance/port quirks and backoffice-driving lessons learned from real runs are collected in
+`references/gotchas.md`. Skim it before Step 4 (instance) and Step 7 (capture), and consult it
+directly if something doesn't behave as expected.
