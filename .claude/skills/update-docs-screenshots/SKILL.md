@@ -32,7 +32,9 @@ needs explanation or heuristics rather than execution, it's a doc in `references
 | File | What it's for |
 |---|---|
 | `scripts/resolve-repos.sh` | Step 1 — resolves `$HARNESS`/`$DOCS`/`$FORK_OWNER`, nothing to judge |
+| `references/repo-discovery.md` | Step 1 — how/why each variable is resolved (only needed when it doesn't behave as expected) |
 | `scripts/check-pr-guard.sh` | Step 2 — counts open screenshot PRs, applies the guard by mode |
+| `references/github-fallback.md` | Steps 2 and 9 — the `mcp__github__*` path when `gh` isn't installed |
 | `scripts/resolve-image.sh` | Step 3, targeted/Slack branches — resolves and validates the image path |
 | `scripts/normalize-image-ref.sh` | Step 3, Slack branch — turns a pasted GitHub URL into the plain path `resolve-image.sh` expects |
 | `scripts/ensure-instance-up.sh` | Step 4 — checks/starts the matching demo instance |
@@ -42,6 +44,7 @@ needs explanation or heuristics rather than execution, it's a doc in `references
 | `references/image-selection.md` | Step 3, discovery branch — the pre-v14 detection heuristic (judgment, not scriptable) |
 | `references/slack-queue.md` | Step 3, Slack branch — the channel-as-queue algorithm and reply conventions |
 | `references/capture-workflow.md` | Steps 6–8's dimension/config/review mechanics |
+| `references/publish-pr.md` | Step 9 — the full commit/rename/push/PR commands |
 | `references/gotchas.md` | Known quirks — skim before Step 4 and Step 7, or on unexpected behavior |
 
 ## Three modes
@@ -71,8 +74,8 @@ invocation works exactly one of them, replying in-thread with the result:
 /update-docs-screenshots slack:#some-other-channel
 ```
 
-The default channel is **`#docs-screenshot-agent`** (private, ID `C0BNAABAFK5` — see
-`references/slack-queue.md`). Only pass `slack:#channel-name` to target a different one.
+The default channel and its ID are in `references/slack-queue.md` — only pass `slack:#channel-name`
+to target a different one.
 
 Targeted and Slack mode relax **candidate selection only** — everything else is unchanged, including
 the one-PR-per-run rule above. Steps 4–10 are identical across all three modes, except that Slack
@@ -135,15 +138,16 @@ echo "HARNESS=$HARNESS  DOCS=$DOCS  FORK_OWNER=$FORK_OWNER"
 
 If `$DOCS` comes back empty, there's no way to guess it safely. Ask the user for the absolute path
 (interactive only, per the autonomy note above — in a routine, fail loudly and end the run instead).
+See `references/repo-discovery.md` for exactly how each variable is resolved and why.
 
 Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
 ## Step 2 — Don't stack PRs (scheduled-run guard)
 
-Count open screenshot PRs from previous runs before doing any work. **This is a `gh`/MCP fork per
-the `github-ops` skill — check `command -v gh` first**, since Claude web / a scheduled routine has
-no `gh` CLI, only `mcp__github__*` tools (confirmed: the script fails loudly with exit `3` if
-called without `gh`, rather than silently reporting zero open PRs and bypassing the guard):
+Count open screenshot PRs from previous runs before doing any work. **Check `command -v gh` first**
+— Claude web / a scheduled routine has no `gh` CLI, only `mcp__github__*` tools; see
+`references/github-fallback.md` for that path (the exact MCP query and the exit-code logic to apply
+by hand):
 
 ```bash
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh discovery "$FORK_OWNER"   # discovery mode
@@ -151,15 +155,7 @@ called without `gh`, rather than silently reporting zero open PRs and bypassing 
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh slack "$FORK_OWNER"        # Slack mode
 ```
 
-**No `gh`:** call `mcp__github__search_pull_requests` (query
-`repo:umbraco/UmbracoDocs is:pr is:open author:<FORK_OWNER>`), filter the results yourself for a
-head branch starting with `update-screenshot-`, and count them — there's no script for this path,
-since MCP tools are only callable by you, not from a bash script. Apply the exact same exit-code
-logic below by hand. (Tool name per the current `github-ops` skill; confirm against the live
-`mcp__github__*` list if it doesn't match.)
-
-The script (or your manual count, on the MCP path) gives the open count (and, if any are open,
-their PR numbers/URLs) and exits/resolves to:
+The script gives the open count (and, if any are open, their PR numbers/URLs) and exits:
 
 - **`0`** — proceed to Step 3. In targeted mode this includes the case where the guard tripped but is
   only a warning (printed to stderr) — the user asked for this specific image, so it doesn't stop
@@ -283,93 +279,31 @@ re-run Step 7.
 
 ## Step 9 — Replace the asset and open the PR
 
-In the **docs repo**, on a feature branch, replace the asset (see the renaming check below), then
-push and open a draft PR:
-
-```bash
-cd "$DOCS"
-git checkout main && git pull upstream main
-git checkout -b update-screenshot-<name>
-```
-
-**Check whether the filename itself should change first.** A stale version marker on the filename
-(e.g. `cropping-images-v9.png`) is misleading once the shot shows the current UI — the version
-*folder* (`17/`, `18/`) already disambiguates, so the marker on the filename is just leftover noise:
-
-```bash
-OLD_NAME="$(basename "<original-filename>")"
-NEW_NAME="$(.claude/skills/update-docs-screenshots/scripts/rename-stale-image.sh "$OLD_NAME")"
-
-if [ "$NEW_NAME" != "$OLD_NAME" ] && [ ! -e "<asset-dir>/$NEW_NAME" ]; then
-  cp "$HARNESS/screenshots/<name>.png" "<asset-dir>/$NEW_NAME"
-  git rm --quiet "<asset-dir>/$OLD_NAME"
-  # Update every markdown reference to the old filename — portable (works without GNU vs BSD sed):
-  for f in $(grep -rl "$OLD_NAME" --include='*.md' .); do
-    node -e "
-      const fs = require('fs');
-      const [file, oldName, newName] = process.argv.slice(1);
-      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').split(oldName).join(newName));
-    " "$f" "$OLD_NAME" "$NEW_NAME"
-  done
-  git add -A   # picks up the renamed asset + every edited .md file
-else
-  cp "$HARNESS/screenshots/<name>.png" "<asset-dir>/$OLD_NAME"
-  git add "<asset-dir>/$OLD_NAME"
-fi
-```
-
-The script only recognizes a version marker as a **suffix** (`-v9`, `_v9`, `v9` right before the
-extension — the common case); a marker as a **prefix** (`v9-media-types...`) prints the name
-unchanged, so it's left alone rather than guessed at. Also skips the rename if the new name would
-collide with an existing file.
-
-```bash
-git commit -m "Update <article> backoffice screenshot for v<version>"
-git push origin update-screenshot-<name>          # origin = the fork ($FORK_OWNER)
-gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --draft \
-  --title "Update <article> backoffice screenshot" --body "Refreshed outdated pre-v14 screenshot for v<version>."
-```
-
-Everything above (`git checkout`/`add`/`commit`/`push`) works the same whether or not `gh` is
-installed — only the final PR-creation call needs a fallback. **No `gh`:** use
-`mcp__github__create_pull_request` with the same `base`/`head`/`title`/`body`/`draft` values (per
-the `github-ops` skill).
-
-Notes:
-- The branch lives on the fork (`origin`); the PR is opened against upstream `umbraco/UmbracoDocs`,
-  base branch `main`. Keep it a **draft** unless the user says otherwise.
-- If the filename wasn't renamed, only an image changed and Vale has nothing to lint. **If it was
-  renamed**, markdown files changed too — run `vale <changed.md>` on each and fix any errors before
-  pushing.
-- GitBook builds a preview per push; the PR checks include a `docs.umbraco.com` revision link — return
-  it plus the PR URL to the user once it's built.
-- **Slack mode:** once `gh pr create` returns the PR URL, reply in-thread to the source message with
-  `✅ PR: <pr-url>` right away — don't wait until Step 10. That reply is the durable record the next
-  invocation's queue algorithm depends on.
+On a feature branch in the **docs repo**, replace the asset, push, and open a draft PR against
+upstream `umbraco/UmbracoDocs` — full commands, the filename-renaming check (a stale version marker
+like `-v9` gets stripped and every markdown reference updated to match), and the `gh`/MCP fallback
+are all in `references/publish-pr.md`. Two things worth knowing before you open it: the PR is always
+a **draft**, and **Slack mode must reply in-thread with the PR URL right away** — don't wait for
+Step 10.
 
 ## Step 10 — Clean up temp artifacts, then stop (one PR per run)
 
-First, delete this run's temporary artifacts from the harness repo — they are not part of it and must
-never be committed. **Delete the exact filenames you created, never a wildcard** — `screenshots/`
-can hold other legitimate images from other runs or manual work, and `rm -f screenshots/*.png` has
-already once deleted three unrelated pre-existing screenshots that had nothing to do with the run:
+First, delete this run's temporary artifacts from the harness repo by their **exact filenames, never
+a wildcard** (`references/gotchas.md` has why):
 
 ```bash
 cd "$HARNESS"
 rm -f "tests/capture-<name>.spec.ts" "screenshots/<name>.png"
-rm -f tests/explore-*.spec.ts   # only if you created one — still name-specific, never a bare *.png/*.ts
+rm -f tests/explore-*.spec.ts   # only if you created one — still name-specific
 ```
 
-Then check for anything else that shouldn't be committed — an environment workaround (e.g. a
-temporary `launchOptions.executablePath` in `playwright.config.ts` to point at whatever Chromium
-revision is actually installed, if it didn't match what the pinned Playwright version expected) or
-harmless `dotnet run`-generated diff noise on `demo/*/Views/*.cshtml` (trailing-newline changes from
-the Razor runtime — not a real edit) both count. Revert anything you find that isn't this run's
-intended change:
+Then check for anything else that shouldn't be committed — environment workarounds (a temporary
+Chromium `executablePath`, harmless `dotnet run` Razor diffs — see `references/gotchas.md`) count
+too. Revert anything you find that isn't this run's intended change:
 
 ```bash
-git status --short   # anything left is either the PR-worthy files (none, in the harness repo) or noise
-git checkout -- <any such file>   # revert environment workarounds / runtime noise individually
+git status --short   # anything left is either PR-worthy (none, in the harness repo) or noise
+git checkout -- <any such file>
 git status --short   # confirm truly clean before reporting done
 ```
 

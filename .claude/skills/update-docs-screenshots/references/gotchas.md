@@ -39,6 +39,9 @@
   file"-style changes on `demo/*/Views/*.cshtml` — harmless runtime artifacts, not real edits.
   They'd trip the "leave the harness repo clean" check in Step 10 if not reverted alongside
   everything else `git status --short` turns up.
+- **Delete Step 10's temp files by exact name, never a wildcard.** `rm -f screenshots/*.png` has
+  already once deleted three unrelated pre-existing screenshots that had nothing to do with the
+  run — `screenshots/` and `tests/` can hold other legitimate files from other runs or manual work.
 
 ## Backoffice-driving gotchas (learned in real runs)
 
