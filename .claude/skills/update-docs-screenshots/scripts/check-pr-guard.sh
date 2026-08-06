@@ -8,6 +8,12 @@
 #   1 — STOP: discovery or slack mode and the guard tripped. End the run; do not explore, capture,
 #       resolve a Slack message, or open anything.
 #   2 — bad arguments
+#   3 — gh CLI not available. This script is the LOCAL path only (see SKILL.md Step 2) — on
+#       Claude web / a scheduled routine, gh isn't installed and this must not be called at all;
+#       use the mcp__github__* fallback SKILL.md documents instead. Fails loudly on purpose: an
+#       earlier version let this fall through silently (empty count compared with -ge produced a
+#       shell error but still reached `exit 0`), meaning the reviewer-load guard was silently
+#       bypassed on every cloud run instead of stopping anything.
 #
 # Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 9 — keep
 # that prefix in sync with tests/PR-creation code so this guard keeps working.
@@ -28,6 +34,10 @@ esac
 if [ -z "$FORK_OWNER" ]; then
   echo "Usage: check-pr-guard.sh <discovery|targeted|slack> <fork-owner> [max-open]" >&2
   exit 2
+fi
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh CLI not found — this is the local-only path. Use the mcp__github__* fallback (SKILL.md Step 2) instead of calling this script." >&2
+  exit 3
 fi
 
 OPEN=$(gh pr list --repo umbraco/UmbracoDocs --author "$FORK_OWNER" --state open \

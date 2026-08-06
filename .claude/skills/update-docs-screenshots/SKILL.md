@@ -27,20 +27,9 @@ screenshot requires invoking the skill again. Never batch.
 
 This file carries the step sequence and the decisions at each step. Where a step is pure mechanics
 with no judgment call, it's an executable script in `scripts/` rather than bash to retype; where it
-needs explanation or heuristics rather than execution, it's a doc in `references/`:
-
-| File | What it's for |
-|---|---|
-| `scripts/resolve-repos.sh` | Step 1 — resolves `$HARNESS`/`$DOCS`/`$FORK_OWNER`, nothing to judge |
-| `scripts/check-pr-guard.sh` | Step 2 — counts open screenshot PRs, applies the guard by mode |
-| `scripts/resolve-image.sh` | Step 3, targeted/Slack branches — resolves and validates the image path |
-| `scripts/normalize-image-ref.sh` | Step 3, Slack branch — turns a pasted GitHub URL into the plain path `resolve-image.sh` expects |
-| `scripts/ensure-instance-up.sh` | Step 4 — checks/starts the matching demo instance |
-| `scripts/list-stale-candidates.sh` | Step 3, discovery branch — bounds ~3,800 images down to a short prioritized shortlist |
-| `references/image-selection.md` | Step 3, discovery branch — the pre-v14 detection heuristic (judgment, not scriptable) |
-| `references/slack-queue.md` | Step 3, Slack branch — the channel-as-queue algorithm and reply conventions |
-| `references/capture-workflow.md` | Steps 6–8's dimension/config/review mechanics |
-| `references/gotchas.md` | Known quirks — skim before Step 4 and Step 7, or on unexpected behavior |
+needs explanation or heuristics rather than execution, it's a doc in `references/` — each step below
+links its own. `references/gotchas.md` is the one worth skimming up front regardless of which step
+you're on: known quirks (environment, backoffice-driving, cross-platform) collected from real runs.
 
 ## Three modes
 
@@ -52,36 +41,9 @@ The mode is decided by **what the invocation carried**:
 | **Targeted** | an image path was supplied | **warn only**, run continues | resolves the supplied path |
 | **Slack** | invoked as `slack` (or `slack:#channel-name`) | **hard stop** if a screenshot PR is open (also scheduled-style, repeated) | reads a Slack channel as a queue, resolves the next request |
 
-Targeted mode is for local, interactive use — you already know which image is stale, so the scan is
-wasted work and the reviewer-load guard shouldn't block you. Invoke it with a path relative to the
-docs repo root, or an absolute one:
-
-```
-/update-docs-screenshots 18/umbraco-cms/fundamentals/data/defining-content/images/query-builder.png
-/update-docs-screenshots /Users/me/Projects/UmbracoDocs/18/umbraco-cms/.../query-builder.png
-```
-
-Slack mode is for a shared request queue — anyone can drop an image link in the channel, and each
-invocation works exactly one of them, replying in-thread with the result:
-
-```
-/update-docs-screenshots slack                          # defaults to #docs-screenshot-agent
-/update-docs-screenshots slack:#some-other-channel
-```
-
-The default channel is **`#docs-screenshot-agent`** (private, ID `C0BNAABAFK5` — see
-`references/slack-queue.md`). Only pass `slack:#channel-name` to target a different one.
-
-Targeted and Slack mode relax **candidate selection only** — everything else is unchanged, including
-the one-PR-per-run rule above. Steps 4–10 are identical across all three modes, except that Slack
-mode has one extra obligation layered on top: **whatever step ends the run — success or failure —
-reply in the source message's thread before stopping** (Step 3's Slack branch and
-`references/slack-queue.md` spell out the exact reply format; don't let a failed run leave the
-thread silent, or the next invocation has no way to know that message was already attempted).
-
-Discovery and Slack mode are both designed to run **as a scheduled/repeated routine**. To avoid
-overwhelming the docs PR reviewers, successive runs must not stack up open PRs — Step 2 bails out
-early if a screenshot PR from a previous run is still open.
+Invocation syntax for each mode, and exactly what stays the same vs. differs across them (the
+one-PR-per-run rule, Slack's in-thread reply obligation, scheduling/pacing) are in
+`references/modes.md`.
 
 **Running unattended means never pausing mid-run for a human to confirm anything** — a scheduled
 routine has no one there to answer. Discovery and Slack mode make their own judgment calls and act
@@ -90,12 +52,10 @@ on them autonomously; review happens afterward, via the draft PR (discovery) or 
 interactive, run from a keyboard with the user right there — may pause to ask something.
 
 > ## ⛔ Playwright only — never claude-in-chrome
-> All backoffice interaction (logging in, navigating sections, expanding the tree, opening
-> workspaces/modals, and capturing) is done with **Playwright**. **Do NOT use the
-> `mcp__claude-in-chrome__*` tools or the `umbraco-chrome-navigation` skill** for any part of this —
-> not for exploration, not for capture. Route/selector discovery is a throwaway Playwright
-> `explore-*.spec.ts` (Step 7). If you catch yourself about to open a Chrome tab, stop and write a
-> Playwright spec instead.
+> All backoffice interaction — login, navigation, capture — is **Playwright**, including
+> route/selector discovery (a throwaway `explore-*.spec.ts`, Step 7). **Never**
+> `mcp__claude-in-chrome__*` or `umbraco-chrome-navigation`, for any part of this. Catch yourself
+> reaching for a Chrome tab? Write a Playwright spec instead.
 
 ## Repos, instances, scope
 
@@ -107,20 +67,9 @@ interactive, run from a keyboard with the user right there — may pause to ask 
 | v18 instance | `$HARNESS/demo/v18` → `https://localhost:44327/umbraco` |
 | Admin login | `admin@admin.com` / `1234567890` (read from env by the helper) |
 
-Paths are **not** hardcoded — the skill is machine-agnostic. `$HARNESS`, `$DOCS`, and `$FORK_OWNER`
-are established in Step 1 and used throughout.
-
-**Scope is `umbraco-cms` only.** The local demo instances are a vanilla CMS, so only CMS backoffice
-screens are reproducible. **Skip everything else — do not treat these as candidates:**
-
-- Cloud: `umbraco-cloud/`, `umbraco-heartcore/`, `umbraco-compose/`, and Deploy-only dialogs
-  (Compare / Queue for transfer / Transfer now / Partial restore — these need a Current-vs-Live Cloud
-  environment and cannot be reproduced locally).
-- Add-on products: `umbraco-commerce/`, `umbraco-deploy/`, `umbraco-engage/`, `umbraco-ui-builder/`,
-  `umbraco-workflow/`, and the other non-CMS areas (`umbraco-forms/`, `umbraco-search/`,
-  `umbraco-automate/`, `ai-*`).
-
-Effective candidate scope: **`$DOCS/<version>/umbraco-cms/**` only** (version = `17` or `18`).
+Paths are **not** hardcoded — `$HARNESS`, `$DOCS`, and `$FORK_OWNER` are established in Step 1 and
+used throughout. **Scope is `umbraco-cms` only** (the demo instances are a vanilla CMS) —
+`references/scope.md` has exactly what's excluded and why; every mode enforces the same boundary.
 
 ## Step 1 — Locate the repos (machine-agnostic)
 
@@ -133,12 +82,16 @@ echo "HARNESS=$HARNESS  DOCS=$DOCS  FORK_OWNER=$FORK_OWNER"
 
 If `$DOCS` comes back empty, there's no way to guess it safely. Ask the user for the absolute path
 (interactive only, per the autonomy note above — in a routine, fail loudly and end the run instead).
+See `references/repo-discovery.md` for exactly how each variable is resolved and why.
 
 Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
 ## Step 2 — Don't stack PRs (scheduled-run guard)
 
-Count open screenshot PRs from previous runs before doing any work:
+Count open screenshot PRs from previous runs before doing any work. **Check `command -v gh` first**
+— Claude web / a scheduled routine has no `gh` CLI, only `mcp__github__*` tools; see
+`references/github-fallback.md` for that path (the exact MCP query and the exit-code logic to apply
+by hand):
 
 ```bash
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh discovery "$FORK_OWNER"   # discovery mode
@@ -146,7 +99,7 @@ Count open screenshot PRs from previous runs before doing any work:
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh slack "$FORK_OWNER"        # Slack mode
 ```
 
-The script prints the open count (and, if any are open, their PR numbers/URLs) and exits:
+The script gives the open count (and, if any are open, their PR numbers/URLs) and exits:
 
 - **`0`** — proceed to Step 3. In targeted mode this includes the case where the guard tripped but is
   only a warning (printed to stderr) — the user asked for this specific image, so it doesn't stop
@@ -184,29 +137,13 @@ instance in Step 4. Follow **one** of the three branches, never more than one:
   AngularJS signature and surface one candidate — this needs reading the images and judging them, so
   it isn't scripted; see `references/image-selection.md` for the bounded-shortlist script and the
   detection heuristic. Take the best candidate forward autonomously (per the note above).
-- **Slack mode** (invoked as `slack`/`slack:#channel-name`): read the channel as a queue, find the
-  next request, and resolve its image reference the same way targeted mode does. This mixes MCP tool
-  calls (reading/replying to Slack, which only you can do — not scriptable) with the same
-  `resolve-image.sh` script targeted mode uses. Full detail — the channel-resolution step, the exact
-  "last-reply-then-next" queue algorithm, and the reply format for both success and failure — is in
-  `references/slack-queue.md`; read it before running this branch. Short version:
-
-  1. Resolve the channel (by name if given, else the pending default — see the channel-setup note
-     above) and read its history.
-  2. Find the newest message that already has a completion reply, then take the **next** message
-     after it — not the oldest unreplied message overall (see the reference for why this distinction
-     matters). If there's no next message, there's nothing to do: end the run, no reply needed.
-  3. Extract the image URL/path from that message's text, normalize it, then resolve it:
-
-     ```bash
-     REF="$(.claude/skills/update-docs-screenshots/scripts/normalize-image-ref.sh "$RAW_TEXT")"
-     eval "$(.claude/skills/update-docs-screenshots/scripts/resolve-image.sh "$REF" "$DOCS")"
-     ```
-
-  4. **A nonzero exit from `resolve-image.sh` does not just end the run here — reply in-thread with
-     `❌ Errored: <the script's stderr reason>` first**, so the next invocation knows this message was
-     attempted and moves on to the one after it. This is the one place targeted mode's "just end the
-     run" instruction isn't sufficient by itself.
+- **Slack mode** (invoked as `slack`/`slack:#channel-name`): read the channel as a queue (via MCP
+  tool calls — not scriptable), pick the next request by the "last-reply-then-next" algorithm, then
+  extract and resolve its image reference the same way targeted mode does
+  (`normalize-image-ref.sh` → `resolve-image.sh`). **Read `references/slack-queue.md` before
+  running this branch** — it has the channel resolution, the exact queue algorithm, and the one
+  departure from targeted mode's failure handling: a `resolve-image.sh` rejection here must be
+  followed by an in-thread `❌ Errored: <reason>` reply before ending the run, not just a silent stop.
 
 ## Step 4 — Confirm the matching instance is up
 
@@ -240,10 +177,8 @@ capture. Targeted mode may ask whether to continue anyway (per the autonomy note
 just ends the run (a future run tries again); Slack mode replies `❌ Errored: image isn't referenced
 by any article — nothing to capture against` and moves on.
 
-Read the surrounding markdown for the feature, screen, tab, and any specific content/state shown.
-Optionally open the rendered page on `docs.umbraco.com` for context. Note the target: which section
-(content / media / settings / …), which tree node, which workspace tab, and whether a menu or modal
-is open.
+Read the surrounding markdown (optionally the rendered page on `docs.umbraco.com`) to note the
+target: section, tree node, workspace tab, and whether a menu or modal is open.
 
 ## Step 6 — Determine target dimensions
 
@@ -270,55 +205,38 @@ re-run Step 7.
 
 ## Step 9 — Replace the asset and open the PR
 
-In the **docs repo**, on a feature branch, replace the asset in place (keep the exact path and
-filename so every `.md` reference keeps working), then push and open a draft PR:
-
-```bash
-cd "$DOCS"
-git checkout main && git pull upstream main
-git checkout -b update-screenshot-<name>
-cp "$HARNESS/screenshots/<name>.png" <version>/umbraco-cms/.../<original-filename>.png
-git add <path-to-asset>
-git commit -m "Update <article> backoffice screenshot for v<version>"
-git push origin update-screenshot-<name>          # origin = the fork ($FORK_OWNER)
-gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --draft \
-  --title "Update <article> backoffice screenshot" --body "Refreshed outdated pre-v14 screenshot for v<version>."
-```
-
-Notes:
-- The branch lives on the fork (`origin`); the PR is opened against upstream `umbraco/UmbracoDocs`,
-  base branch `main`. Keep it a **draft** unless the user says otherwise.
-- Because only an image is being replaced (no markdown/prose changes), Vale has nothing to lint. If a
-  future run also edits `.md`, run `vale <changed.md>` and fix any errors before pushing.
-- GitBook builds a preview per push; the PR checks include a `docs.umbraco.com` revision link — return
-  it plus the PR URL to the user once it's built.
-- **Slack mode:** once `gh pr create` returns the PR URL, reply in-thread to the source message with
-  `✅ PR: <pr-url>` right away — don't wait until Step 10. That reply is the durable record the next
-  invocation's queue algorithm depends on.
+On a feature branch in the **docs repo**, replace the asset, push, and open a draft PR against
+upstream `umbraco/UmbracoDocs` — full commands, the filename-renaming check (a stale version marker
+like `-v9` gets stripped and every markdown reference updated to match), and the `gh`/MCP fallback
+are all in `references/publish-pr.md`. Two things worth knowing before you open it: the PR is always
+a **draft**, and **Slack mode must reply in-thread with the PR URL right away** — don't wait for
+Step 10.
 
 ## Step 10 — Clean up temp artifacts, then stop (one PR per run)
 
-First, delete this run's temporary artifacts from the harness repo — they are not part of it and must
-never be committed:
+First, delete this run's temporary artifacts from the harness repo by their **exact filenames, never
+a wildcard** (`references/gotchas.md` has why):
 
 ```bash
 cd "$HARNESS"
-rm -f tests/capture-<name>.spec.ts tests/explore-*.spec.ts screenshots/<name>.png
-git status --short   # confirm the harness repo is clean
+rm -f "tests/capture-<name>.spec.ts" "screenshots/<name>.png"
+rm -f tests/explore-*.spec.ts   # only if you created one — still name-specific
 ```
 
-Then **the run is complete.** Report the PR (and preview link) to the user and stop.
-Do not loop back to Step 3, do not scan for more candidates, and do not open a second PR in this run.
-**Each invocation handles exactly one image, in all three modes** — in targeted mode that is the
-image you were given; in Slack mode that is the one message the queue algorithm picked; refreshing
-another means invoking the skill again (with its path, or letting Slack mode pick the next request).
+Then check for anything else that shouldn't be committed — environment workarounds (a temporary
+Chromium `executablePath`, harmless `dotnet run` Razor diffs — see `references/gotchas.md`) count
+too. Revert anything you find that isn't this run's intended change:
 
-Pacing differs by mode: scheduled discovery and Slack runs refresh the next screenshot only after
-this PR is merged/closed (the Step 2 hard stop), so reviewers are never handed a pile of screenshot
-PRs at once. Targeted runs are not paced — you chose to open this one.
+```bash
+git status --short   # anything left is either PR-worthy (none, in the harness repo) or noise
+git checkout -- <any such file>
+git status --short   # confirm truly clean before reporting done
+```
 
-If you're finishing in Slack mode, double-check the completion reply actually landed before
-reporting done — a missing reply means the next invocation will pick the same message again.
+Then **the run is complete** (per the one-PR-per-run rule at the top of this file — do not loop back
+to Step 3). Report the PR (and preview link) and stop. **Slack mode:** double-check the completion
+reply actually landed before reporting done — a missing reply means the next invocation picks the
+same message again.
 
 The only durable output of a run lives in the **docs repo** (the committed asset on the PR branch).
 The harness repo should be left exactly as it was found — clean.
