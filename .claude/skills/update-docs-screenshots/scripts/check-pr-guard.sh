@@ -16,7 +16,7 @@ set -u
 
 MODE="${1:-}"
 FORK_OWNER="${2:-}"
-MAX_OPEN="${3:-1}"
+MAX_OPEN="${3:-8}"
 
 case "$MODE" in
   discovery|targeted|slack) ;;
