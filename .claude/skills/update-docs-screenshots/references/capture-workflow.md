@@ -3,20 +3,22 @@
 ## Dimensions (Step 6)
 
 Read the original's pixel size so the capture can match it. `sips` is **macOS-only** — it doesn't
-exist on the Linux containers a cloud/routine run uses. Read PNGs cross-platform instead: a PNG's
-width/height live at a fixed byte offset in its IHDR chunk, so a tiny Node snippet (Node's already a
-hard dependency here) reads it with no external tool at all — verified against a real file, matches
-`sips` exactly:
+exist on the Linux containers a cloud/routine run uses, and the docs aren't PNG-only (verified by
+counting the real repo: PNG is ~88%, but JPG/JPEG, GIF, SVG, and WebP all appear too), so a
+PNG-only check would silently break on real originals. Use the cross-platform script instead of
+`sips` or a one-off snippet:
 
 ```bash
-node -e "
-const buf = require('fs').readFileSync(process.argv[1]);
-console.log('width:', buf.readUInt32BE(16), 'height:', buf.readUInt32BE(20));
-" <path-to-original.png>
+.claude/skills/update-docs-screenshots/scripts/get-image-dimensions.sh <path-to-original>
 ```
 
-For a non-PNG original (occasionally `.jpg`), `file <path>` reports dimensions in its output on both
-macOS and Linux (verified: `..., 1560x810, components 3`) — parse the `WxH` out of that instead.
+PNG is read straight from its IHDR chunk bytes via Node (already a hard dependency here — no
+external tool, verified matches `sips` exactly); other raster formats fall back to `file`, taking
+its **last** reported `WxH` on the line specifically — verified a real JPEG's `file` output contains
+an earlier, unrelated DPI match (`72x72`) before the real pixel size (`2876x1542`); taking the first
+match instead of the last would silently use the wrong number. SVG and WebP aren't supported (SVG
+has no fixed pixel size; `file` reports no dimensions for WebP on this system) — both fail with a
+clear message rather than a wrong number.
 
 There is no single docs standard — many tutorial shots are ~800px wide, full-window backoffice shots
 run ~1450–1900px, some are retina (2800+). Feed the original's size into the capture config below.
@@ -113,9 +115,10 @@ use claude-in-chrome for this — see the hard rule in SKILL.md.
   Matching numeric dimensions doesn't guarantee this — a real run's capture had the "right"
   dimensions for its `CLIP` region but that region itself was too short, silently cropping out
   content the original included. Read the image, don't just check its size.
-- Verify dimensions (same Node/`file` approach as Step 6 — `sips` is macOS-only):
+- Verify dimensions with the same script as Step 6 (the capture is always PNG, since Playwright's
+  `page.screenshot()` defaults to it, but no reason to duplicate the logic):
   ```bash
-  node -e "const b=require('fs').readFileSync(process.argv[1]);console.log(b.readUInt32BE(16), b.readUInt32BE(20))" screenshots/<name>.png
+  .claude/skills/update-docs-screenshots/scripts/get-image-dimensions.sh screenshots/<name>.png
   ```
 - If the size or content is wrong, **fix it at the source and recapture** — adjust `VIEWPORT`/`CLIP`
   (sized from Step 6's target, per Step 7) or `navigate()`/seeding, then re-run. This is the

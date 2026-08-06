@@ -38,6 +38,7 @@ needs explanation or heuristics rather than execution, it's a doc in `references
 | `scripts/ensure-instance-up.sh` | Step 4 — checks/starts the matching demo instance |
 | `scripts/list-stale-candidates.sh` | Step 3, discovery branch — bounds ~3,800 images down to a short prioritized shortlist |
 | `scripts/rename-stale-image.sh` | Step 9 — strips a stale version-marker suffix from the filename, if present |
+| `scripts/get-image-dimensions.sh` | Steps 6/8 — cross-platform pixel dimensions (PNG/JPEG/GIF; not SVG/WebP) |
 | `references/image-selection.md` | Step 3, discovery branch — the pre-v14 detection heuristic (judgment, not scriptable) |
 | `references/slack-queue.md` | Step 3, Slack branch — the channel-as-queue algorithm and reply conventions |
 | `references/capture-workflow.md` | Steps 6–8's dimension/config/review mechanics |
