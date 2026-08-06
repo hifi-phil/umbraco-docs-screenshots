@@ -22,14 +22,17 @@ run — given to you or picked in Step 3 — all the way through to an open PR (
 run there** — do not find, capture, or PR a second image in the same run. Refreshing another
 screenshot requires invoking the skill again. Never batch.
 
-This file carries the step sequence and the decisions at each step. The mechanical detail behind
-several steps — boilerplate scripts, detection heuristics, capture config — lives in `references/`
-and is loaded only when that step is reached:
+This file carries the step sequence and the decisions at each step. Where a step is pure mechanics
+with no judgment call, it's an executable script in `scripts/` rather than bash to retype; where it
+needs explanation or heuristics rather than execution, it's a doc in `references/`:
 
-| Reference file | Read it for |
+| File | What it's for |
 |---|---|
-| `references/repo-discovery.md` | Step 1's path-resolution script |
-| `references/image-selection.md` | Step 3's targeted-path resolution and discovery-scan detail |
+| `scripts/resolve-repos.sh` | Step 1 — resolves `$HARNESS`/`$DOCS`/`$FORK_OWNER`, nothing to judge |
+| `scripts/check-pr-guard.sh` | Step 2 — counts open screenshot PRs, applies the guard by mode |
+| `scripts/resolve-image.sh` | Step 3, targeted branch — resolves and validates the supplied path |
+| `scripts/ensure-instance-up.sh` | Step 4 — checks/starts the matching demo instance |
+| `references/image-selection.md` | Step 3, discovery branch — the pre-v14 detection heuristic (judgment, not scriptable) |
 | `references/capture-workflow.md` | Steps 6–8's dimension/config/review mechanics |
 | `references/gotchas.md` | Known quirks — skim before Step 4 and Step 7, or on unexpected behavior |
 
@@ -93,64 +96,77 @@ Effective candidate scope: **`$DOCS/<version>/umbraco-cms/**` only** (version = 
 
 ## Step 1 — Locate the repos (machine-agnostic)
 
-Resolve `$HARNESS`, `$DOCS`, and `$FORK_OWNER` before anything else — **do not hardcode paths**. Run
-the resolution script in `references/repo-discovery.md`.
+Resolve `$HARNESS`, `$DOCS`, and `$FORK_OWNER` before anything else — **do not hardcode paths**:
 
-If `$DOCS` comes back empty, **ask the user for the absolute path to their UmbracoDocs checkout**.
-Do not guess or proceed without it.
+```bash
+eval "$(.claude/skills/update-docs-screenshots/scripts/resolve-repos.sh)"
+echo "HARNESS=$HARNESS  DOCS=$DOCS  FORK_OWNER=$FORK_OWNER"
+```
+
+If `$DOCS` comes back empty, **ask the user for the absolute path to their UmbracoDocs checkout**
+and re-export `DOCS` yourself. Do not guess or proceed without it.
 
 Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
 ## Step 2 — Don't stack PRs (scheduled-run guard)
 
-Check how many screenshot PRs from previous runs are still open before doing any work:
+Count open screenshot PRs from previous runs before doing any work:
 
 ```bash
-MAX_OPEN=1   # max concurrent open screenshot PRs from this skill; raise only if reviewers can absorb more
-OPEN=$(gh pr list --repo umbraco/UmbracoDocs --author "$FORK_OWNER" --state open \
-        --json number,headRefName \
-        -q '[.[] | select(.headRefName | startswith("update-screenshot-"))] | length')
-echo "Open screenshot PRs: $OPEN (limit $MAX_OPEN)"
+.claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh discovery "$FORK_OWNER"   # discovery mode
+.claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh targeted "$FORK_OWNER"     # targeted mode
 ```
+
+The script prints the open count (and, if any are open, their PR numbers/URLs) and exits:
+
+- **`0`** — proceed to Step 3. In targeted mode this includes the case where the guard tripped but is
+  only a warning (printed to stderr) — the user asked for this specific image, so it doesn't stop
+  them.
+- **`1`** — **discovery mode only.** The guard tripped: report the already-open PR(s) and **end the
+  run** — nothing to do until a reviewer merges or closes them.
 
 Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 9 — keep that
 prefix so this guard keeps working.
 
-- **Discovery mode:** if `OPEN >= MAX_OPEN`, report the already-open PR(s) and **end the run**
-  (nothing to do until a reviewer merges or closes them). Otherwise continue to Step 3.
-- **Targeted mode:** run the same check for information only. If `OPEN >= MAX_OPEN`, list the open
-  PR(s) and warn that this run will stack another screenshot PR on top of them — then **continue** to
-  Step 3. The user asked for this specific image, so the guard does not stop them.
-
 ## Step 3 — Choose the image for this run
 
 Exactly one image comes out of this step, along with its `$VERSION` (`17` or `18`), which selects the
-instance in Step 4. Follow **one** of the two branches, never both — see `references/image-selection.md`
-for the full detail of each:
+instance in Step 4. Follow **one** of the two branches, never both:
 
-- **Targeted mode** (an image path was supplied): resolve and validate it. Any validation failure
-  **ends the run** with the specific reason; never fall back to discovery or substitute a different
-  image. The pre-v14 AngularJS check is **not a gate** here — the user picked this image, so
-  recapturing an already-current shot is legitimate.
+- **Targeted mode** (an image path was supplied): resolve and validate it with the script — no
+  judgment call needed, so this is deterministic. `$ARG` is the path as the user gave it, docs-relative
+  or absolute:
+
+  ```bash
+  eval "$(.claude/skills/update-docs-screenshots/scripts/resolve-image.sh "$ARG" "$DOCS")"
+  echo "IMG=$IMG  REL=$REL  VERSION=$VERSION"
+  ```
+
+  A nonzero exit **ends the run** — the script's stderr message already states the specific reason
+  (file not found, outside the docs checkout, no demo instance for that version, or out of the
+  `umbraco-cms` scope). Never fall back to discovery or substitute a different image on failure. The
+  pre-v14 AngularJS check is **not a gate** here — the user picked this image, so recapturing an
+  already-current shot is legitimate.
 - **Discovery mode** (no path supplied): scan `$DOCS/<version>/umbraco-cms/**` for the pre-v14
-  AngularJS signature and surface one candidate. Confirm it with the user before capturing.
+  AngularJS signature and surface one candidate — this needs reading the images and judging them, so
+  it isn't scripted; see `references/image-selection.md` for the detection heuristic and selection
+  process. Confirm the candidate with the user before capturing.
 
 ## Step 4 — Confirm the matching instance is up
 
 The version comes from the chosen image's docs path (`17/...` → v17, `18/...` → v18) — the `$VERSION`
-resolved in Step 3.
-
-Check the port, start the instance if needed, wait for `Now listening on:`:
+resolved in Step 3. Checking the port, starting the instance if needed, and waiting for it to be
+ready is pure mechanics, so it's scripted:
 
 ```bash
-lsof -nP -iTCP:44322 -sTCP:LISTEN   # v17
-lsof -nP -iTCP:44327 -sTCP:LISTEN   # v18
-# if nothing is listening, start it (run in its own terminal / background):
-cd "$HARNESS/demo" && dotnet run --project v18
+.claude/skills/update-docs-screenshots/scripts/ensure-instance-up.sh "$VERSION" "$HARNESS"
 ```
 
-On first boot, transient `SQLite Error 14: unable to open database file` lines are expected — wait
-for `Now listening on:`.
+It returns immediately if the port's already listening; otherwise it starts `dotnet run` in the
+background (log at `/tmp/umbraco-demo-v<version>.log`, never inside the repo) and blocks until `Now
+listening on:` appears or it times out (default 90s — pass a third argument to change it). Transient
+`SQLite Error 14: unable to open database file` lines on first boot are expected and already handled
+by the script; a nonzero exit means it genuinely timed out — check the log.
 
 ## Step 5 — Understand what the image depicts
 
