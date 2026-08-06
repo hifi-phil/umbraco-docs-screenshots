@@ -60,9 +60,11 @@ async function navigate(page: import('@playwright/test').Page) {
 }
 // ─── END CONFIG ──────────────────────────────────────────────────────────────
 
-test('capture docs screenshot', async ({ umbracoApi, page }) => {
-  await page.setViewportSize(VIEWPORT);
+// page.setViewportSize() only changes the viewport — device scale factor is a browser-context
+// creation option and can't be set per-page, so it must go through test.use() instead.
+test.use({ viewport: VIEWPORT, deviceScaleFactor: DEVICE_SCALE_FACTOR });
 
+test('capture docs screenshot', async ({ umbracoApi, page }) => {
   await page.goto(`${BASE}/umbraco`, { waitUntil: 'networkidle' });
   await expect(page.locator('umb-app')).toBeVisible({ timeout: 30_000 });
 
