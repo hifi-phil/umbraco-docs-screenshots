@@ -64,13 +64,12 @@ Slack mode is for a shared request queue — anyone can drop an image link in th
 invocation works exactly one of them, replying in-thread with the result:
 
 ```
-/update-docs-screenshots slack
-/update-docs-screenshots slack:#docs-screenshot-requests
+/update-docs-screenshots slack                          # defaults to #docs-screenshot-agent
+/update-docs-screenshots slack:#some-other-channel
 ```
 
-> **Channel setup is still pending.** No channel has been created/confirmed yet — until one exists,
-> `slack:#channel-name` must be given explicitly (there's no baked-in default). Once a channel is
-> settled, update `references/slack-queue.md` with it as the default so a bare `slack` works too.
+The default channel is **`#docs-screenshot-agent`** (private, ID `C0BNAABAFK5` — see
+`references/slack-queue.md`). Only pass `slack:#channel-name` to target a different one.
 
 Targeted and Slack mode relax **candidate selection only** — everything else is unchanged, including
 the one-PR-per-run rule above. Steps 4–10 are identical across all three modes, except that Slack

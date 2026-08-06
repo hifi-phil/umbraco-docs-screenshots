@@ -7,10 +7,19 @@ has the short version.
 
 ## Channel
 
-`slack:#channel-name` resolves the channel via `slack_search_channels` (query on the name without
-the `#`) to get its `channel_id`. **No default channel is configured yet** — until the team settles
-on one, the channel must be given explicitly every invocation. Once it exists, update this line with
-the actual channel and the SKILL.md note that says a default is pending.
+**Default: `#docs-screenshot-agent`** — a private channel, ID `C0BNAABAFK5` (resolved via
+`slack_search_channels` and confirmed readable). A bare `slack` invocation uses this channel; only
+pass `slack:#channel-name` to target a different one (resolve it the same way, by name, via
+`slack_search_channels`).
+
+**Live-tested against this channel** (2026-08-06): posted a real request message (a Slack-formatted
+GitHub link with surrounding chatter), confirmed it's found as a candidate, confirmed the extraction
+→ normalize → resolve chain resolves it correctly, then posted both an `❌ Errored:` and a
+`✅ PR:` test reply in its thread and confirmed `Thread: N replies` and the read-back text both
+behave exactly as documented below. Those test messages are still in the channel — clean them up
+manually if you want it pristine before real use; they won't confuse the algorithm (the thread
+already has a confirmed completion reply, so a real invocation would just move on to whatever's
+posted after it).
 
 ## Reading the queue
 
@@ -38,7 +47,7 @@ list at all, so they're never mistaken for a new candidate).
 
 **Known limitation:** a single `slack_read_channel` call returns up to 100 messages. If the channel
 ever accumulates more unprocessed history than that between runs, paginate with `cursor` — not
-currently implemented, since the channel doesn't exist yet and volume is unknown.
+currently implemented, since real usage volume is still unknown.
 
 ## The "last-reply-then-next" algorithm
 
@@ -50,11 +59,12 @@ more defensive version:
 
 1. Sort candidate messages ascending by timestamp (`Message TS:`).
 2. For each, determine whether it already has a **completion reply** — a thread reply whose text
-   starts with `✅ PR:` or `❌ Errored:` (see Reply format below). The `Thread: N replies (...)` line
-   from `slack_read_channel` tells you whether a message has *any* replies at all; if so, call
+   contains `PR:` or `Errored:` right after the leading emoji (see Reply format below — match on
+   the **word**, not the emoji character). The `Thread: N replies (...)` line from
+   `slack_read_channel` tells you whether a message has *any* replies at all; if so, call
    `slack_read_thread` (with that message's `Message TS:` as `message_ts`) to read the actual reply
-   text and check it against those two prefixes specifically. **A reply that doesn't match either
-   prefix does not count as completion** — a human asking a question in the thread, for instance,
+   text and check it against those two markers specifically. **A reply that doesn't match either
+   marker does not count as completion** — a human asking a question in the thread, for instance,
    must not be mistaken for a processed marker.
 3. Find the message with the **latest timestamp that has a confirmed completion reply**. Call its
    index in the sorted list `i`.
@@ -68,14 +78,20 @@ more defensive version:
 
 ## Extracting and resolving the image reference
 
-The message may have extra commentary around the link ("hey can someone update this? <url> thanks!")
-— pull out just the URL or path token, preferring a URL if one is present, else falling back to a
-bare path ending in an image extension (both forms verified against real message text):
+The message may have extra commentary around the link ("hey can someone update this? <url> thanks!"),
+**and Slack itself wraps links as `<url|display-text>` or bare `<url>`** — confirmed live: a plain
+`https://...` pasted into a message comes back from `slack_read_channel`/`slack_read_thread` wrapped
+like `<https://github.com/.../foo.png|github.com/.../foo.png>`, not as a bare URL. Strip that first,
+then fall back to a plain URL, then to a bare path ending in an image extension (all three forms
+verified against real message text):
 
 ```bash
-TOKEN=$(echo "$RAW_TEXT" | grep -oE 'https?://[^ ]+' | head -1)
+TOKEN=$(echo "$RAW_TEXT" | grep -oE '<https?://[^|>]+' | head -1 | sed 's/^<//')
 if [ -z "$TOKEN" ]; then
-  TOKEN=$(echo "$RAW_TEXT" | grep -oE '[^[:space:]]+\.(png|jpg|jpeg|gif)' | head -1)
+  TOKEN=$(echo "$RAW_TEXT" | grep -oE 'https?://[^ >]+' | head -1)
+fi
+if [ -z "$TOKEN" ]; then
+  TOKEN=$(echo "$RAW_TEXT" | grep -oE '[^[:space:]<>]+\.(png|jpg|jpeg|gif)' | head -1)
 fi
 ```
 
@@ -99,7 +115,7 @@ found" and you can resolve it manually.
 
 `slack_read_thread` (verified against a real threaded message) returns the parent message followed
 by numbered replies, each with its own `From:`/`Time:`/`Message TS:`/text — scan each reply's text
-for the two completion prefixes:
+for the two completion markers (see Reply format below — by word, not emoji):
 
 ```
 === THREAD PARENT MESSAGE ===
@@ -118,24 +134,33 @@ Message TS: 1785652123.954509
 ...
 ```
 
-## Reply format — exact prefixes matter
+## Reply format — match on the words, never the emoji
 
-The algorithm above parses reply text for these exact prefixes. Don't paraphrase them:
+**Verified live (posted real test replies and read them back):** `slack_send_message` accepts a
+literal `✅`/`❌`, but `slack_read_channel`/`slack_read_thread` return it back as Slack's own
+shortcode — `✅` → `:white_check_mark:`, `❌` → `:x:`. **The algorithm must match on the word that
+follows (`PR:` / `Errored:`), never on the emoji character** — matching the emoji itself would
+silently never find a completion reply, since what comes back isn't what was sent.
+
+Post these exact shapes (the emoji is for human readability in Slack; keep it, just don't depend on
+it for parsing):
 
 - **Success** (after `gh pr create` returns, per Step 9's note): reply in-thread
-  (`thread_ts` = the target message's `ts`) with:
+  (`thread_ts` = the target message's `Message TS:`) with:
   ```
   ✅ PR: <pr-url>
   ```
+  — which reads back as `:white_check_mark: PR: <pr-url>`. Match candidate replies against `PR:`.
 - **Failure** at any point after the message was chosen — `resolve-image.sh` rejected it, the
   instance wouldn't start, the capture failed, anything else that ends the run early — reply
   in-thread with:
   ```
   ❌ Errored: <specific reason>
   ```
+  — which reads back as `:x: Errored: <specific reason>`. Match candidate replies against `Errored:`.
   Use the actual reason (the script's stderr message, or a short description of what went wrong) —
   it's what a human skimming the channel uses to decide whether to fix and re-drop the link, or
   investigate further.
 
 Never post any other message shape as a way of marking a message handled — the queue algorithm
-depends on these two prefixes to tell "done" from "just chatter."
+depends on these two markers to tell "done" from "just chatter."
