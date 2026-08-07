@@ -34,7 +34,9 @@ thread silent, or the next invocation has no way to know that message was alread
 ## Scheduling
 
 Discovery and Slack mode are both designed to run **as a scheduled/repeated routine**. To avoid
-overwhelming the docs PR reviewers, successive runs must not stack up open PRs — Step 2 bails out
-early if a screenshot PR from a previous run is still open. Pacing differs by mode: scheduled
-discovery/Slack runs refresh the next screenshot only after the previous PR is merged/closed (the
-Step 2 hard stop); targeted runs aren't paced at all — you chose to open that one.
+overwhelming the docs PR reviewers, successive runs must not stack up open PRs without bound —
+Step 2 bails out once **8 or more** screenshot PRs from previous runs are still open (not at 1 —
+a handful of open PRs awaiting review is the normal, expected steady state for this routine).
+Pacing differs by mode: scheduled discovery/Slack runs stop opening new PRs once the 8-PR ceiling
+is hit, resuming once reviewers merge/close some of them back down (the Step 2 hard stop); targeted
+runs aren't paced at all — you chose to open that one.
