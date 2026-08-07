@@ -14,11 +14,11 @@ every cloud run — a real bug this fixes).
 **No `gh`:** call `mcp__github__search_pull_requests` with the query
 `repo:umbraco/UmbracoDocs is:pr is:open author:<FORK_OWNER>`, filter the results yourself for a
 head branch starting with `update-screenshot-`, and count them. Apply the exact same exit-code
-logic the script documents:
+logic the script documents, **against the same limit: 8** (the script's default `MAX_OPEN` — do not
+substitute 1, "any", or "at least one"; a handful of open PRs awaiting review is normal):
 
-- **`0`** (proceed) — count is under the limit, or targeted mode where being at/over it is only a
-  warning.
-- **`1`** (stop) — discovery/Slack mode and the count is at/over the limit: report the already-open
+- **`0`** (proceed) — count is under 8, or targeted mode where being at/over it is only a warning.
+- **`1`** (stop) — discovery/Slack mode and the count is **at or over 8**: report the already-open
   PR(s) and end the run.
 
 (Tool name per the current `github-ops` skill; confirm against the live `mcp__github__*` list if it

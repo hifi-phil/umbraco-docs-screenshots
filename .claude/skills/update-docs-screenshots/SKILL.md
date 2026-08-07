@@ -37,9 +37,9 @@ The mode is decided by **what the invocation carried**:
 
 | Mode | When | PR guard (Step 2) | Choosing the image (Step 3) |
 |---|---|---|---|
-| **Discovery** (default) | no argument — how scheduled runs fire | **hard stop** if a screenshot PR is open | full scan, picks a candidate itself |
-| **Targeted** | an image path was supplied | **warn only**, run continues | resolves the supplied path |
-| **Slack** | invoked as `slack` (or `slack:#channel-name`) | **hard stop** if a screenshot PR is open (also scheduled-style, repeated) | reads a Slack channel as a queue, resolves the next request |
+| **Discovery** (default) | no argument — how scheduled runs fire | **hard stop at 8+ open** screenshot PRs | full scan, picks a candidate itself |
+| **Targeted** | an image path was supplied | **warn only** at 8+ open, run continues | resolves the supplied path |
+| **Slack** | invoked as `slack` (or `slack:#channel-name`) | **hard stop at 8+ open** screenshot PRs (also scheduled-style, repeated) | reads a Slack channel as a queue, resolves the next request |
 
 Invocation syntax for each mode, and exactly what stays the same vs. differs across them (the
 one-PR-per-run rule, Slack's in-thread reply obligation, scheduling/pacing) are in
@@ -88,7 +88,9 @@ Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
 ## Step 2 — Don't stack PRs (scheduled-run guard)
 
-Count open screenshot PRs from previous runs before doing any work. **Check `command -v gh` first**
+Count open screenshot PRs from previous runs before doing any work. **The limit is 8 open
+screenshot PRs** (`check-pr-guard.sh`'s default `MAX_OPEN`) — a handful of open PRs awaiting review
+is normal and expected; the guard exists to stop pile-ups, not to require zero. **Check `command -v gh` first**
 — Claude web / a scheduled routine has no `gh` CLI, only `mcp__github__*` tools; see
 `references/github-fallback.md` for that path (the exact MCP query and the exit-code logic to apply
 by hand):
