@@ -9,7 +9,8 @@ description: >-
   that queue is empty. `slack:#channel-name` checks one other channel only, no discovery fallback.
   Either way it uses Playwright to drive the matching demo instance (v17 or v18) to that exact
   backoffice area, recaptures the shot at configurable dimensions, drops it in place, and opens a
-  draft docs PR. Use when the user wants to find, refresh, or update outdated backoffice
+  docs PR (title prefixed `[AI]`, ready for review). Use when the user wants to find, refresh, or
+  update outdated backoffice
   screenshots in the documentation, or to work through a Slack channel of screenshot requests.
   Trigger on "update docs screenshots", "find outdated screenshots", "refresh backoffice
   screenshots", "update this screenshot", "recapture <path>.png", "recapture the screenshot for
@@ -52,7 +53,7 @@ filename-based lookup, etc.).
 
 **Running unattended means never pausing mid-run for a human to confirm anything** — a scheduled
 routine has no one there to answer. Default mode makes its own judgment calls (in either phase) and
-acts on them autonomously; review happens afterward, via the draft PR (discovery-sourced) or the
+acts on them autonomously; review happens afterward, via the opened PR (discovery-sourced) or the
 thread reply (Slack-sourced), never by blocking mid-flow waiting on a response. Only an explicit
 image-path invocation — inherently interactive, run from a keyboard with the user right there — may
 pause to ask something.
@@ -216,12 +217,13 @@ re-run Step 7.
 
 ## Step 9 — Replace the asset and open the PR
 
-On a feature branch in the **docs repo**, replace the asset, push, and open a draft PR against
-upstream `umbraco/UmbracoDocs` — full commands, the filename-renaming check (a stale version marker
-like `-v9` gets stripped and every markdown reference updated to match), and the `gh`/MCP fallback
-are all in `references/publish-pr.md`. Two things worth knowing before you open it: the PR is always
-a **draft**, and **a Slack-sourced run must reply in-thread with the PR URL right away** — don't
-wait for Step 10.
+On a feature branch in the **docs repo**, replace the asset, push, and open the PR against upstream
+`umbraco/UmbracoDocs` — full commands, the filename-renaming check (a stale version marker like
+`-v9` gets stripped and every markdown reference updated to match), and the `gh`/MCP fallback are
+all in `references/publish-pr.md`. Three things worth knowing before you open it: the title is
+always prefixed **`[AI]`** so reviewers can spot it's machine-generated, the PR is opened **ready
+for review** (not draft — per team preference), and **a Slack-sourced run must reply in-thread with
+the PR URL right away** — don't wait for Step 10.
 
 ## Step 10 — Clean up temp artifacts, then stop (one PR per run)
 
