@@ -1,7 +1,7 @@
 # Replace the asset and open the PR (Step 9 detail)
 
 In the **docs repo**, on a feature branch, replace the asset (see the renaming check below), then
-push and open a draft PR:
+push and open the PR:
 
 ```bash
 cd "$DOCS"
@@ -47,8 +47,8 @@ collide with an existing file.
 ```bash
 git commit -m "Update <article> backoffice screenshot for v<version>"
 git push origin update-screenshot-<name>          # origin = the fork ($FORK_OWNER)
-gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --draft \
-  --title "Update <article> backoffice screenshot" --body "Refreshed outdated pre-v14 screenshot for v<version>."
+gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" \
+  --title "[AI] Update <article> backoffice screenshot" --body "Refreshed outdated pre-v14 screenshot for v<version>."
 ```
 
 Everything above (`git checkout`/`add`/`commit`/`push`) works the same whether or not `gh` is
@@ -58,7 +58,8 @@ for the `mcp__github__*` path.
 ## Notes
 
 - The branch lives on the fork (`origin`); the PR is opened against upstream `umbraco/UmbracoDocs`,
-  base branch `main`. Keep it a **draft** unless the user says otherwise.
+  base branch `main`. Open it **ready for review, not draft** (team preference), and always prefix
+  the title with **`[AI]`** so reviewers can tell it was machine-generated at a glance.
 - If the filename wasn't renamed, only an image changed and Vale has nothing to lint. **If it was
   renamed**, markdown files changed too — run `vale <changed.md>` on each and fix any errors before
   pushing.

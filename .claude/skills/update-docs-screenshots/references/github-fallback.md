@@ -26,9 +26,11 @@ doesn't match.)
 
 ## Step 9 — creating the PR
 
-`gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --draft --title "..." --body "..."`
-is the `gh`-CLI path (see `references/publish-pr.md` for the full command in context).
+`gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --title "[AI] ..." --body "..."`
+is the `gh`-CLI path (see `references/publish-pr.md` for the full command in context — note there's
+no `--draft` flag: these open ready for review, per team preference).
 
-**No `gh`:** use `mcp__github__create_pull_request` with the same `base`/`head`/`title`/`body`/
-`draft` values. Everything before it (`git checkout`/`add`/`commit`/`push`) works identically
-either way — only this final call needs the fallback.
+**No `gh`:** use `mcp__github__create_pull_request` with the same `base`/`head`/`body` values, the
+`title` prefixed with `[AI] ` the same way, and `draft: false` (or the field omitted, if the tool
+defaults to non-draft). Everything before it (`git checkout`/`add`/`commit`/`push`) works
+identically either way — only this final call needs the fallback.
