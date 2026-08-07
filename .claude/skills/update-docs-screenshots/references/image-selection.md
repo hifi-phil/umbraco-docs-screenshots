@@ -1,12 +1,12 @@
-# Choosing the image — discovery mode (Step 3 detail)
+# Choosing the image — default mode's discovery-fallback phase (Step 3 detail)
 
 Targeted mode has no judgment call to document here — `scripts/resolve-image.sh` resolves and
 validates the supplied path deterministically (see SKILL.md Step 3).
 
-Discovery mode does need judgment — reading images and deciding whether they're outdated isn't
-scriptable — but **don't scan the whole tree**: `$DOCS/<version>/umbraco-cms/**` holds around 3,800
-images combined across both majors, and reading anywhere near that many isn't feasible or
-necessary for a job that only needs to find **one** candidate per run.
+The discovery-fallback phase does need judgment — reading images and deciding whether they're
+outdated isn't scriptable — but **don't scan the whole tree**: `$DOCS/<version>/umbraco-cms/**`
+holds around 3,800 images combined across both majors, and reading anywhere near that many isn't
+feasible or necessary for a job that only needs to find **one** candidate per run.
 
 1. Get a bounded, prioritized shortlist instead of enumerating the whole tree yourself:
 
