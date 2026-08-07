@@ -18,8 +18,8 @@ logic the script documents, **against the same limit: 8** (the script's default 
 substitute 1, "any", or "at least one"; a handful of open PRs awaiting review is normal):
 
 - **`0`** (proceed) — count is under 8, or targeted mode where being at/over it is only a warning.
-- **`1`** (stop) — discovery/Slack mode and the count is **at or over 8**: report the already-open
-  PR(s) and end the run.
+- **`1`** (stop) — default mode or explicit Slack mode and the count is **at or over 8**: report the
+  already-open PR(s) and end the run.
 
 (Tool name per the current `github-ops` skill; confirm against the live `mcp__github__*` list if it
 doesn't match.)

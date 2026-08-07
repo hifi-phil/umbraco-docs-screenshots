@@ -1,16 +1,18 @@
-# Slack mode — the channel-as-queue detail (Step 3, Slack branch)
+# The channel-as-queue detail (Step 3, Slack-check phase / explicit Slack mode)
 
-Slack mode turns a channel into a request queue: anyone can drop an image link in as a message,
-and each invocation of this skill works exactly one of them, replying in the message's own thread
-with the result. This file is the precise algorithm and reply conventions — SKILL.md's Step 3 only
-has the short version.
+Any Slack-sourced run turns a channel into a request queue: anyone can drop an image link in as a
+message, and each invocation works exactly one of them, replying in the message's own thread with
+the result. This algorithm runs in two places: **default mode's Slack-check phase** (Step 3, always
+tried first, against the default channel) and **explicit `slack:#channel-name` mode** (against a
+named channel, no discovery fallback). This file is the precise algorithm and reply conventions —
+SKILL.md's Step 3 only has the short version.
 
 ## Channel
 
 **Default: `#docs-screenshot-agent`** — a private channel, ID `C0BNAABAFK5` (resolved via
-`slack_search_channels` and confirmed readable). A bare `slack` invocation uses this channel; only
-pass `slack:#channel-name` to target a different one (resolve it the same way, by name, via
-`slack_search_channels`).
+`slack_search_channels` and confirmed readable). Default mode's Slack-check phase always uses this
+channel; pass `slack:#channel-name` explicitly to target a different one (resolve it the same way,
+by name, via `slack_search_channels`).
 
 **Live-tested against this channel** (2026-08-06): posted a real request message (a Slack-formatted
 GitHub link with surrounding chatter), confirmed it's found as a candidate, confirmed the extraction

@@ -64,6 +64,7 @@ for the `mcp__github__*` path.
   pushing.
 - GitBook builds a preview per push; the PR checks include a `docs.umbraco.com` revision link — return
   it plus the PR URL to the user once it's built.
-- **Slack mode:** once `gh pr create` returns the PR URL, reply in-thread to the source message with
-  `✅ PR: <pr-url>` right away — don't wait until Step 10. That reply is the durable record the next
-  invocation's queue algorithm depends on.
+- **Any Slack-sourced run** (default mode's Slack-check phase, or explicit Slack mode): once
+  `gh pr create` returns the PR URL, reply in-thread to the source message with `✅ PR: <pr-url>`
+  right away — don't wait until Step 10. That reply is the durable record the next invocation's
+  queue algorithm depends on.
