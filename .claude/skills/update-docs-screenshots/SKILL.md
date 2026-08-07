@@ -3,16 +3,15 @@ name: update-docs-screenshots
 description: >-
   Replaces outdated Umbraco backoffice screenshots in the docs with fresh captures from a running
   local instance, then opens a docs PR. Takes an optional image path to recapture a specific
-  screenshot; with no argument (how scheduled runs fire) it first checks the shared Slack request
-  queue (`#docs-screenshot-agent`) for an unhandled image link and works that, replying in-thread
-  with the resulting PR or error — only if the queue has nothing new does it fall back to exploring
-  the UmbracoDocs repo one article at a time for shots that still show the old pre-v14 AngularJS UI
-  and picking one itself. Passing `slack:#channel-name` checks only that specific channel's queue,
-  with no discovery fallback. Either way it uses Playwright to drive the matching demo instance (v17
-  or v18) to that exact backoffice area, recaptures the shot at configurable dimensions, drops it in
-  place, and opens a draft docs PR. Use when the user wants to find, refresh, or update outdated
-  backoffice screenshots in the documentation, or to work through a Slack channel of screenshot
-  requests. Trigger on "update docs screenshots", "find outdated screenshots", "refresh backoffice
+  screenshot; with no argument (how scheduled runs fire) it first works the shared Slack request
+  queue (`#docs-screenshot-agent`), replying in-thread with the resulting PR or error, and only
+  falls back to exploring the UmbracoDocs repo itself for a stale pre-v14 AngularJS screenshot once
+  that queue is empty. `slack:#channel-name` checks one other channel only, no discovery fallback.
+  Either way it uses Playwright to drive the matching demo instance (v17 or v18) to that exact
+  backoffice area, recaptures the shot at configurable dimensions, drops it in place, and opens a
+  draft docs PR. Use when the user wants to find, refresh, or update outdated backoffice
+  screenshots in the documentation, or to work through a Slack channel of screenshot requests.
+  Trigger on "update docs screenshots", "find outdated screenshots", "refresh backoffice
   screenshots", "update this screenshot", "recapture <path>.png", "recapture the screenshot for
   <article>", "process the screenshot requests channel", "work the screenshot queue".
 ---
@@ -39,18 +38,17 @@ The mode is decided by **what the invocation carried**:
 
 | Mode | When | PR guard (Step 2) | Choosing the image (Step 3) |
 |---|---|---|---|
-| **Default** | no argument — how scheduled runs fire | **hard stop at 8+ open** screenshot PRs | **Slack-check phase first:** read the default queue (`#docs-screenshot-agent`); if it has an unhandled request, resolve and work that (see the Slack-sourced-run rules below). **Only if the queue has nothing new**, fall back to a full discovery scan and pick a candidate itself. |
+| **Default** | no argument — how scheduled runs fire | **hard stop at 8+ open** screenshot PRs | Slack-check phase first (default channel); discovery scan only as a fallback — see Step 3 |
 | **Targeted** | an image path was supplied | **warn only** at 8+ open, run continues | resolves the supplied path |
-| **Slack (explicit)** | invoked as `slack:#channel-name` | **hard stop at 8+ open** screenshot PRs (also scheduled-style, repeated) | reads the named channel's queue only, resolves the next request — **no discovery fallback** if it's empty |
+| **Slack (explicit)** | invoked as `slack:#channel-name` | **hard stop at 8+ open** screenshot PRs (also scheduled-style, repeated) | reads the named channel's queue only — **no discovery fallback** if it's empty |
 
 Invocation syntax, exactly what stays the same vs. differs (the one-PR-per-run rule, the
 in-thread reply obligation, scheduling/pacing), and the precise Slack-check algorithm are in
 `references/modes.md` and `references/slack-queue.md`.
 
-A run is **Slack-sourced** whenever its image came from a channel queue — whether that happened as
-the default mode's Slack-check phase, or via an explicit `slack:#channel-name` invocation. Both
-cases follow the same rules below (in-thread reply, filename-based lookup, etc.); "Slack-sourced
-run" refers to either.
+A run is **Slack-sourced** whenever its image came from a channel queue (default mode's Slack-check
+phase, or explicit `slack:#channel-name`) — both follow the same rules below (in-thread reply,
+filename-based lookup, etc.).
 
 **Running unattended means never pausing mid-run for a human to confirm anything** — a scheduled
 routine has no one there to answer. Default mode makes its own judgment calls (in either phase) and
@@ -104,14 +102,10 @@ is normal and expected; the guard exists to stop pile-ups, not to require zero. 
 by hand):
 
 ```bash
-.claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh discovery "$FORK_OWNER"   # default mode (covers both its phases)
+.claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh discovery "$FORK_OWNER"   # default mode — run once, covers both its phases
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh targeted "$FORK_OWNER"     # targeted mode
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh slack "$FORK_OWNER"        # explicit slack:#channel-name mode
 ```
-
-Run this **once per invocation**, before Step 3 picks a phase — default mode's guard call covers
-both its Slack-check and discovery-fallback phases; don't call the script a second time if the
-Slack-check phase comes up empty and it falls through to discovery.
 
 The script gives the open count (and, if any are open, their PR numbers/URLs) and exits:
 
@@ -146,27 +140,21 @@ instance in Step 4. Follow **one** of the three branches, never more than one:
   pre-v14 AngularJS check is **not a gate** here — the user picked this image, so recapturing an
   already-current shot is legitimate.
 - **Default mode** (no path supplied) — **two phases, in order, never both in one run:**
-  1. **Slack-check phase (always tried first):** read the default channel (`#docs-screenshot-agent`)
-     as a queue (via MCP tool calls — not scriptable), pick the next request by the
-     "last-reply-then-next" algorithm, then extract and resolve its image reference the same way
-     targeted mode does (`normalize-image-ref.sh` → `resolve-image.sh`). **Read
-     `references/slack-queue.md` before running this phase** — it has the channel resolution, the
-     exact queue algorithm, and the one departure from targeted mode's failure handling: a
-     `resolve-image.sh` rejection here must be followed by an in-thread `❌ Errored: <reason>` reply
-     before ending the run, not just a silent stop. If this phase finds and resolves a request, take
-     it forward — **do not also run the discovery scan in the same run.**
-  2. **Discovery-fallback phase (only if phase 1 found nothing to do — an empty queue, or every
-     candidate already has a completion reply):** pick a version to scan first — `$VERSION` isn't
-     known yet the way it is in targeted mode (there's no chosen image to derive it from). Default to
-     whichever demo instance is already listening (`lsof -nP -iTCP:44322/-iTCP:44327 -sTCP:LISTEN`);
-     if neither is up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14
-     AngularJS signature and surface one candidate — this needs reading the images and judging them,
-     so it isn't scripted; see `references/image-selection.md` for the bounded-shortlist script and
-     the detection heuristic. Take the best candidate forward autonomously (per the note above).
-- **Slack (explicit)** mode (invoked as `slack:#channel-name`): identical algorithm to the
-  Slack-check phase above, but against the **named** channel instead of the default one, and with
-  **no discovery fallback** — if that channel's queue has nothing to do, the run just ends (see
-  `references/slack-queue.md`).
+  1. **Slack-check phase (always tried first):** work the next unhandled request from the default
+     channel (`#docs-screenshot-agent`), exactly as `references/slack-queue.md` describes (queue
+     algorithm, extraction/resolution, and its one departure from targeted mode's failure handling —
+     an in-thread `❌ Errored:` reply instead of a silent stop). If it resolves a request, take it
+     forward — **do not also run the discovery scan in the same run.**
+  2. **Discovery-fallback phase (only if phase 1 found nothing to do):** pick a version to scan
+     first — `$VERSION` isn't known yet the way it is in targeted mode. Default to whichever demo
+     instance is already listening (`lsof -nP -iTCP:44322/-iTCP:44327 -sTCP:LISTEN`); if neither is
+     up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14 AngularJS
+     signature and surface one candidate — see `references/image-selection.md` for the
+     bounded-shortlist script and the detection heuristic. Take the best candidate forward
+     autonomously (per the note above).
+- **Slack (explicit)** mode (invoked as `slack:#channel-name`): same algorithm as the Slack-check
+  phase above, against the **named** channel instead, with **no discovery fallback** — an empty
+  queue just ends the run (see `references/slack-queue.md`).
 
 ## Step 4 — Confirm the matching instance is up
 
@@ -257,10 +245,9 @@ git status --short   # confirm truly clean before reporting done
 ```
 
 Then **the run is complete** (per the one-PR-per-run rule at the top of this file — do not loop back
-to Step 3, and do not fall through from a completed Slack-check phase into the discovery-fallback
-phase after a PR is already open). Report the PR (and preview link) and stop. **Any Slack-sourced
-run:** double-check the completion reply actually landed before reporting done — a missing reply
-means the next invocation picks the same message again.
+to Step 3, in either phase). Report the PR (and preview link) and stop. **Any Slack-sourced run:**
+double-check the completion reply actually landed before reporting done — a missing reply means the
+next invocation picks the same message again.
 
 The only durable output of a run lives in the **docs repo** (the committed asset on the PR branch).
 The harness repo should be left exactly as it was found — clean.

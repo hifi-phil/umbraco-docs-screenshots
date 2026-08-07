@@ -2,10 +2,9 @@
 
 Any Slack-sourced run turns a channel into a request queue: anyone can drop an image link in as a
 message, and each invocation works exactly one of them, replying in the message's own thread with
-the result. This algorithm runs in two places: **default mode's Slack-check phase** (Step 3, always
-tried first, against the default channel) and **explicit `slack:#channel-name` mode** (against a
-named channel, no discovery fallback). This file is the precise algorithm and reply conventions —
-SKILL.md's Step 3 only has the short version.
+the result — whether that's default mode's Slack-check phase (default channel, always tried first)
+or explicit `slack:#channel-name` mode (named channel, no discovery fallback). This file is the
+precise algorithm and reply conventions — SKILL.md's Step 3 only has the short version.
 
 ## Channel
 

@@ -38,13 +38,13 @@ discovery fallback.)
 
 ## What differs, what doesn't
 
-Targeted mode and both Slack-sourced paths (default mode's phase 1, and explicit Slack mode) relax
-**candidate selection only** — everything else is unchanged, including the one-PR-per-run rule (see
-the top of SKILL.md). Steps 4–10 are identical regardless of how the image was chosen, except that
-any Slack-sourced run has one extra obligation layered on top: **whatever step ends the run —
-success or failure — reply in the source message's thread before stopping** (Step 3's Slack-check
-phase and `references/slack-queue.md` spell out the exact reply format; don't let a failed run leave
-the thread silent, or the next invocation has no way to know that message was already attempted).
+Targeted mode and any Slack-sourced run relax **candidate selection only** — everything else is
+unchanged, including the one-PR-per-run rule (see the top of SKILL.md). Steps 4–10 are identical
+regardless of how the image was chosen, except that any Slack-sourced run has one extra obligation
+layered on top: **whatever step ends the run — success or failure — reply in the source message's
+thread before stopping** (`references/slack-queue.md` spells out the exact reply format; don't let a
+failed run leave the thread silent, or the next invocation has no way to know that message was
+already attempted).
 
 ## Scheduling
 
