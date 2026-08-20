@@ -33,3 +33,9 @@ It refuses to run against a dirty working tree (won't discard uncommitted work) 
 `references/publish-pr.md`'s Step 9 pull makes. Step 9 pulls `upstream/main` again right before
 branching; that's an intentional second check for commits landing mid-run, not a substitute for
 syncing here.
+
+It also fast-forwards `origin/main` (the fork on GitHub) to match, so the fork itself doesn't drift
+further behind independently of any one local checkout — a scheduled/cloud run that clones the fork
+fresh instead of reusing this checkout would otherwise hit the same staleness bug again. That push
+is a plain fast-forward (never `--force`); if `origin/main` has diverged, it fails loudly instead of
+overwriting whatever's there.

@@ -11,6 +11,13 @@
 # (Step 9 also pulls upstream/main right before branching; that's an intentional second check in
 # case new commits landed during a long capture run, not a replacement for this one.)
 #
+# Also fast-forwards origin/main (the fork on GitHub) to match, so the fork doesn't drift further
+# behind independently of this one local checkout — a scheduled/cloud run that clones the fork
+# fresh instead of reusing this checkout would otherwise see the same staleness the discovery
+# heuristic just got fixed for. Push is a plain fast-forward (never --force); if origin/main has
+# diverged (e.g. someone committed to the fork's main directly), the push fails loudly rather than
+# clobbering it.
+#
 # Refuses to touch a dirty working tree — never discards uncommitted work — and requires an
 # `upstream` remote to already be configured (same assumption references/publish-pr.md makes).
 
@@ -35,3 +42,4 @@ fi
 git -C "$DOCS" fetch upstream
 git -C "$DOCS" checkout main
 git -C "$DOCS" pull --ff-only upstream main
+git -C "$DOCS" push origin main
