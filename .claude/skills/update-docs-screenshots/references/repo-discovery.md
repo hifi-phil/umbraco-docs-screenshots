@@ -18,3 +18,18 @@ path to their UmbracoDocs checkout and use that — do not proceed without it.
 
 `$FORK_OWNER` (the PR head namespace) is read from the docs repo's `origin` remote via `gh repo view`
 (falling back to parsing the remote URL directly) — never assumed from a username.
+
+## Keeping `$DOCS` fresh
+
+`scripts/sync-docs-repo.sh "$DOCS"` (run right after resolution, still Step 1) fetches `upstream`,
+checks out `main`, and fast-forwards it to `upstream/main`. This runs **before** Step 3 touches any
+file in `$DOCS` on purpose: the discovery-fallback scan and image resolution both read straight out
+of the working tree, so a checkout that's behind upstream makes a screenshot someone already fixed
+(merged PR, never pulled locally) look stale again — the discovery heuristic then keeps re-nominating
+the same already-fixed image every run. Syncing first closes that gap.
+
+It refuses to run against a dirty working tree (won't discard uncommitted work) and requires an
+`upstream` remote pointing at `umbraco/UmbracoDocs` to already exist — the same assumption
+`references/publish-pr.md`'s Step 9 pull makes. Step 9 pulls `upstream/main` again right before
+branching; that's an intentional second check for commits landing mid-run, not a substitute for
+syncing here.

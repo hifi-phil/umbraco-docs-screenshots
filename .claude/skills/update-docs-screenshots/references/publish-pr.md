@@ -5,7 +5,7 @@ push and open the PR:
 
 ```bash
 cd "$DOCS"
-git checkout main && git pull upstream main
+git checkout main && git pull upstream main   # second sync — Step 1 already did one before Step 3's scan; this catches anything landed mid-run
 git checkout -b update-screenshot-<name>
 ```
 

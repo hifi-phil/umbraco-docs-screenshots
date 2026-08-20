@@ -91,6 +91,19 @@ If `$DOCS` comes back empty, there's no way to guess it safely. Ask the user for
 (interactive only, per the autonomy note above — in a routine, fail loudly and end the run instead).
 See `references/repo-discovery.md` for exactly how each variable is resolved and why.
 
+Then sync `$DOCS` with upstream **before** anything reads its files — Step 3's discovery scan and
+targeted/Slack image resolution both look at the working tree as it currently stands, so a stale
+checkout makes an already-fixed screenshot look outdated and get picked again:
+
+```bash
+.claude/skills/update-docs-screenshots/scripts/sync-docs-repo.sh "$DOCS"
+```
+
+A nonzero exit means it refused to sync (dirty working tree or no `upstream` remote configured) —
+its stderr says which; **end the run** rather than proceeding against a checkout of unknown
+freshness (interactive invocations may ask the user to resolve it and retry instead, per the
+autonomy note above).
+
 Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
 ## Step 2 — Don't stack PRs (scheduled-run guard)
