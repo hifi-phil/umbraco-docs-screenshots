@@ -28,11 +28,12 @@ of the working tree, so a checkout that's behind upstream makes a screenshot som
 (merged PR, never pulled locally) look stale again — the discovery heuristic then keeps re-nominating
 the same already-fixed image every run. Syncing first closes that gap.
 
-It refuses to run against a dirty working tree (won't discard uncommitted work) and requires an
-`upstream` remote pointing at `umbraco/UmbracoDocs` to already exist — the same assumption
-`references/publish-pr.md`'s Step 9 pull makes. Step 9 pulls `upstream/main` again right before
-branching; that's an intentional second check for commits landing mid-run, not a substitute for
-syncing here.
+It refuses to run against a dirty working tree (won't discard uncommitted work). If the `upstream`
+remote pointing at `umbraco/UmbracoDocs` is missing — as it always will be on a scheduled/cloud run
+that clones the fork fresh each fire — it adds one automatically rather than failing, since the URL
+isn't user-specific: it's the same target `references/publish-pr.md`'s Step 9 pull and PR-creation
+already hardcode. Step 9 pulls `upstream/main` again right before branching; that's an intentional
+second check for commits landing mid-run, not a substitute for syncing here.
 
 It also fast-forwards `origin/main` (the fork on GitHub) to match, so the fork itself doesn't drift
 further behind independently of any one local checkout — a scheduled/cloud run that clones the fork

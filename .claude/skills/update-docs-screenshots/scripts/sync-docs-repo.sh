@@ -18,8 +18,11 @@
 # diverged (e.g. someone committed to the fork's main directly), the push fails loudly rather than
 # clobbering it.
 #
-# Refuses to touch a dirty working tree — never discards uncommitted work — and requires an
-# `upstream` remote to already be configured (same assumption references/publish-pr.md makes).
+# Refuses to touch a dirty working tree — never discards uncommitted work. If the `upstream` remote
+# is missing (e.g. a scheduled/cloud run that clones the fork fresh every fire never has one), it's
+# added automatically rather than treated as fatal — the URL isn't user-specific, it's the same
+# umbraco/UmbracoDocs target this skill already hardcodes for the PR base (see
+# references/publish-pr.md's `gh pr create --repo umbraco/UmbracoDocs`).
 
 set -euo pipefail
 
@@ -35,8 +38,8 @@ if [ -n "$(git -C "$DOCS" status --porcelain 2>/dev/null)" ]; then
 fi
 
 if ! git -C "$DOCS" remote get-url upstream >/dev/null 2>&1; then
-  echo "sync-docs-repo.sh: $DOCS has no 'upstream' remote configured (expected to point at umbraco/UmbracoDocs)." >&2
-  exit 1
+  echo "sync-docs-repo.sh: $DOCS has no 'upstream' remote — adding one pointing at umbraco/UmbracoDocs." >&2
+  git -C "$DOCS" remote add upstream https://github.com/umbraco/UmbracoDocs.git
 fi
 
 git -C "$DOCS" fetch upstream
