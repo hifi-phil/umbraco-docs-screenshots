@@ -99,8 +99,10 @@ checkout makes an already-fixed screenshot look outdated and get picked again:
 .claude/skills/update-docs-screenshots/scripts/sync-docs-repo.sh "$DOCS"
 ```
 
-A nonzero exit means it refused to sync (dirty working tree or no `upstream` remote configured) —
-its stderr says which; **end the run** rather than proceeding against a checkout of unknown
+A missing `upstream` remote is fixed automatically (added pointing at `umbraco/UmbracoDocs`) — this
+matters most for a scheduled/cloud run, which clones the fork fresh every fire and so never starts
+with one. A nonzero exit means it refused to sync for a real reason — a dirty working tree, most
+likely; its stderr says which — **end the run** rather than proceeding against a checkout of unknown
 freshness (interactive invocations may ask the user to resolve it and retry instead, per the
 autonomy note above).
 
