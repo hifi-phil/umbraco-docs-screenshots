@@ -35,6 +35,8 @@
   `use: { launchOptions: { executablePath: '<installed-chromium-path>' } }` in
   `playwright.config.ts` works around it — but it's an **environment quirk, not a repo change**.
   Revert it in Step 10 along with everything else that isn't this run's actual output.
+  `scripts/cloud-env-setup.sh` (the cloud environment's setup script) installs the matching build,
+  so this should only be needed if that setup step failed.
 - **`dotnet run` leaves trivial Razor diffs.** Booting an instance can leave "no newline at end of
   file"-style changes on `demo/*/Views/*.cshtml` — harmless runtime artifacts, not real edits.
   They'd trip the "leave the harness repo clean" check in Step 10 if not reverted alongside
@@ -42,6 +44,15 @@
 - **Delete Step 10's temp files by exact name, never a wildcard.** `rm -f screenshots/*.png` has
   already once deleted three unrelated pre-existing screenshots that had nothing to do with the
   run — `screenshots/` and `tests/` can hold other legitimate files from other runs or manual work.
+
+- **Never `cd <repo> && git …` — use `git -C <repo> …`.** In a routine run, any command that
+  changes directory before a git command raises a permission prompt ("This command changes
+  directory before running a version-control command…"), and nobody is there to answer it. Four
+  scheduled runs (26 Sep–1 Oct 2026) sat in `requires_action` on exactly that. Branch deletion
+  prompts too — abandon a candidate with `scripts/abandon-candidate.sh`, not by hand.
+- **GraphQL is blocked in cloud sessions.** `gh pr list`/`gh pr view` fail with `403 GitHub
+  GraphQL is not available from Claude Code sessions`. Use `gh api repos/…` (REST) or the
+  `mcp__github__*` tools.
 
 ## Backoffice-driving gotchas (learned in real runs)
 

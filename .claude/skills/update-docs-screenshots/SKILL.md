@@ -112,10 +112,10 @@ Use `$HARNESS`, `$DOCS`, and `$FORK_OWNER` in every command below.
 
 Count open screenshot PRs from previous runs before doing any work. **The limit is 8 open
 screenshot PRs** (`check-pr-guard.sh`'s default `MAX_OPEN`) — a handful of open PRs awaiting review
-is normal and expected; the guard exists to stop pile-ups, not to require zero. **Check `command -v gh` first**
-— Claude web / a scheduled routine has no `gh` CLI, only `mcp__github__*` tools; see
-`references/github-fallback.md` for that path (the exact MCP query and the exit-code logic to apply
-by hand):
+is normal and expected; the guard exists to stop pile-ups, not to require zero. The script uses
+the REST API through `gh api`, so it works locally and in cloud/routine sessions (where GraphQL,
+and therefore `gh pr list`, is blocked). Only if it exits `3` (no `gh`) or `4` (API call failed)
+fall back to the `mcp__github__*` path in `references/github-fallback.md`:
 
 ```bash
 .claude/skills/update-docs-screenshots/scripts/check-pr-guard.sh discovery "$FORK_OWNER"   # default mode — run once, covers both its phases
@@ -166,7 +166,9 @@ instance in Step 4. Follow **one** of the three branches, never more than one:
      instance is already listening (`lsof -nP -iTCP:44322/-iTCP:44327 -sTCP:LISTEN`); if neither is
      up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14 AngularJS
      signature and surface one candidate — see `references/image-selection.md` for the
-     bounded-shortlist script and the detection heuristic. Take the best candidate forward
+     bounded-shortlist script and the detection heuristic. The shortlist already leaves out images
+     a reviewer has turned down (`skip-images.txt` plus closed-unmerged screenshot PRs), so don't
+     add those back. Take the best candidate forward
      autonomously (per the note above).
 - **Slack (explicit)** mode (invoked as `slack:#channel-name`): same algorithm as the Slack-check
   phase above, against the **named** channel instead, with **no discovery fallback** — an empty
@@ -195,8 +197,7 @@ targeted mode and any Slack-sourced run the filename is `$(basename "$IMG")` —
 find the article(s) that reference it, since you were given the image rather than the article:
 
 ```bash
-cd "$DOCS"
-grep -rn "<image-filename>" --include='*.md' <version>/umbraco-cms/
+grep -rn "<image-filename>" --include='*.md' "$DOCS/<version>/umbraco-cms/"
 ```
 
 If nothing references it, the image may be orphaned — there's no screen/state to know what to
@@ -246,9 +247,8 @@ First, delete this run's temporary artifacts from the harness repo by their **ex
 a wildcard** (`references/gotchas.md` has why):
 
 ```bash
-cd "$HARNESS"
-rm -f "tests/capture-<name>.spec.ts" "screenshots/<name>.png"
-rm -f tests/explore-*.spec.ts   # only if you created one — still name-specific
+rm -f "$HARNESS/tests/capture-<name>.spec.ts" "$HARNESS/screenshots/<name>.png"
+rm -f "$HARNESS/tests/explore-<name>.spec.ts"   # only if you created one — by exact name
 ```
 
 Then check for anything else that shouldn't be committed — environment workarounds (a temporary
@@ -256,10 +256,13 @@ Chromium `executablePath`, harmless `dotnet run` Razor diffs — see `references
 too. Revert anything you find that isn't this run's intended change:
 
 ```bash
-git status --short   # anything left is either PR-worthy (none, in the harness repo) or noise
-git checkout -- <any such file>
-git status --short   # confirm truly clean before reporting done
+git -C "$HARNESS" status --short   # anything left is either PR-worthy (none, in the harness repo) or noise
+git -C "$HARNESS" checkout -- <any such file>
+git -C "$HARNESS" status --short   # confirm truly clean before reporting done
 ```
+
+Use `git -C`, never `cd … && git …` — the latter raises a permission prompt that stalls an
+unattended run (see `references/gotchas.md`).
 
 Then **the run is complete** (per the one-PR-per-run rule at the top of this file — do not loop back
 to Step 3, in either phase). Report the PR (and preview link) and stop. **Any Slack-sourced run:**

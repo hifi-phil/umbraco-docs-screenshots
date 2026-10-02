@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # List a bounded, prioritized shortlist of candidate images for discovery mode (Step 3).
 #
-# Usage: list-stale-candidates.sh <17|18> <docs-root> [limit]
+# Usage: list-stale-candidates.sh <17|18> <docs-root> [limit] [fork-owner]
+#
+# Always excludes basenames in ../skip-images.txt. With [fork-owner], also excludes images from
+# that fork's closed-unmerged screenshot PRs (scripts/list-rejected-images.sh); if that lookup
+# fails it warns on stderr and carries on with only the skip file.
 #
 # Discovery mode's job is to find ONE stale screenshot, not achieve exhaustive coverage in a
 # single run — reading all ~3,800 images across both CMS majors is neither feasible nor
@@ -31,6 +35,8 @@ set -u
 VERSION="${1:-}"
 DOCS="${2:-}"
 LIMIT="${3:-20}"
+FORK_OWNER="${4:-}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 case "$VERSION" in
   17|18) ;;
@@ -43,8 +49,6 @@ if [ -z "$DOCS" ] || [ ! -d "$DOCS/$VERSION/umbraco-cms" ]; then
   echo "Usage: list-stale-candidates.sh <17|18> <docs-root> [limit]" >&2
   exit 1
 fi
-
-cd "$DOCS/$VERSION/umbraco-cms" || exit 1
 
 # Scan both in-scope product areas. umbraco-forms is optional — older docs checkouts or a
 # harness without Forms installed simply won't have images there, so its absence isn't an error.
@@ -60,6 +64,22 @@ ALL=$(echo "$ALL" | grep -v '^$')
 
 # Exclude anything already marked with the CURRENT version — treat as already refreshed.
 CANDIDATES=$(echo "$ALL" | grep -Eiv "(v${VERSION}|[-_]${VERSION})\.(png|jpe?g)\$")
+
+# Exclude images a reviewer has already turned down: the hand-kept skip file, plus (if a fork
+# owner was given) every image from a closed-unmerged screenshot PR.
+SKIP=$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$SCRIPT_DIR/../skip-images.txt" 2>/dev/null)
+if [ -n "$FORK_OWNER" ]; then
+  if REJECTED=$("$SCRIPT_DIR/list-rejected-images.sh" "$FORK_OWNER"); then
+    SKIP="$SKIP
+$REJECTED"
+  else
+    echo "WARN: couldn't list rejected-PR images — excluding skip-images.txt entries only." >&2
+  fi
+fi
+SKIP=$(echo "$SKIP" | grep -v '^$')
+if [ -n "$SKIP" ]; then
+  CANDIDATES=$(echo "$CANDIDATES" | awk -F/ 'NR==FNR { skip[$0]; next } !($NF in skip)' <(echo "$SKIP") -)
+fi
 
 OLD_MARKED=$(echo "$CANDIDATES" | grep -Ei 'v(1[0-3]|[1-9])[^0-9]*\.(png|jpe?g)$')
 UNMARKED=$(echo "$CANDIDATES" | grep -Eiv 'v(1[0-3]|[1-9])[^0-9]*\.(png|jpe?g)$')
