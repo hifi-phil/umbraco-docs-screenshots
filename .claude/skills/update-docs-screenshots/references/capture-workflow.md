@@ -77,6 +77,24 @@ The spec logs in via `umbracoApi` (Management API — no UI typing), `page.goto`
 runs `navigate()`, waits for `umb-app` + `networkidle`, seeds deterministic content via `umbracoApi`
 if the shot needs specific data, then screenshots to `OUTPUT`.
 
+**Seeding Forms data (interactive runs only).** The helper package has no Forms API helper (only
+`FormsUiHelper`), so a Forms shot that needs a form or entries — e.g. an entries list — has nothing
+in `umbracoApi` to seed with. When the `umbraco-forms-v17`/`umbraco-forms-v18` (and
+`umbraco-cms-v1x`) Developer MCP tools are available in the session, you may use them to create the
+form and submit entries before running the capture spec (the Forms Delivery API is enabled with a
+demo key — see the "Delivery APIs and MCP servers" section of the repo's `CLAUDE.md`). This is a
+seeding shortcut only: navigation and capture stay Playwright. **Scheduled/cloud runs won't have
+working servers** (`.mcp.json` defines them, but the client secret comes from each machine's
+gitignored `.claude/settings.local.json` and the API user lives in the gitignored DB), so never make
+a run depend on them — without them, seed through the Forms
+Management/Delivery API from the spec with `page.request`.
+
+**The MCP API user shows up in Forms shots.** With the MCP setup in place, an `MCP API User` appears
+in the Forms **Security** list (default `ManageSecurityWithUserGroups: false` layout). Size the
+capture so it isn't in the shot, or — when the shot needs the full height — hide that tree item in
+`navigate()` by walking the shadow DOM for a tree/menu item labelled `MCP API User` and setting
+`display: none`, and say so in the PR.
+
 Run it (pass `URL` explicitly — see the Gotchas reference):
 
 ```bash
