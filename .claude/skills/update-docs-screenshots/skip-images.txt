@@ -1,0 +1,7 @@
+# Images discovery mode must never pick, one basename per line (matched exactly, case-sensitive).
+# Add an entry when a reviewer says a screenshot should stay as-is, with the reason/PR as a comment.
+# Discovery also skips images from closed-unmerged screenshot PRs automatically
+# (scripts/list-rejected-images.sh); this file is the offline, permanent list.
+# Targeted and Slack-sourced runs ignore it — a person asking for an image explicitly wins.
+
+sensitive-data-user-group-v8.png   # umbraco/UmbracoDocs#8353 — "Don't update this screenshot" (4 closed attempts)

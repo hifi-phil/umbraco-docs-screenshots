@@ -7,11 +7,13 @@ there's no script equivalent — apply the logic by hand).
 
 ## Step 2 — counting open screenshot PRs
 
-`scripts/check-pr-guard.sh` is the `gh`-CLI path; it fails loudly with exit `3` if `gh` isn't
-installed (verified: without this it would silently report zero open PRs and bypass the guard on
-every cloud run — a real bug this fixes).
+`scripts/check-pr-guard.sh` is the default path everywhere, including cloud/routine sessions: it
+uses `gh api` (REST), because `gh pr list` is GraphQL-backed and GraphQL is blocked from Claude
+Code cloud sessions (`403 GitHub GraphQL is not available from Claude Code sessions`). It fails
+loudly with exit `3` if `gh` isn't installed and `4` if the API call fails, instead of silently
+reporting zero open PRs and bypassing the guard.
 
-**No `gh`:** call `mcp__github__search_pull_requests` with the query
+**Exit `3` or `4`:** call `mcp__github__search_pull_requests` with the query
 `repo:umbraco/UmbracoDocs is:pr is:open author:<FORK_OWNER>`, filter the results yourself for a
 head branch starting with `update-screenshot-`, and count them. Apply the exact same exit-code
 logic the script documents, **against the same limit: 8** (the script's default `MAX_OPEN` — do not

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.claude/skills/update-docs-screenshots/scripts/*)",
+      "Bash(git -C * checkout main)",
+      "Bash(git -C * checkout -b update-screenshot-*)",
+      "Bash(git -C * pull --ff-only upstream main)",
+      "Bash(git -C * add *)",
+      "Bash(git -C * rm *)",
+      "Bash(git -C * commit *)",
+      "Bash(git -C * push -u origin update-screenshot-*)",
+      "Bash(git -C * status*)",
+      "Bash(git -C * checkout -- *)"
+    ]
+  }
+}

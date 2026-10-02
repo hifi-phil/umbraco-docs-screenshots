@@ -9,8 +9,15 @@ outdated isn't scriptable — but **don't scan the whole tree**: `$DOCS/<version
 1. Get a bounded, prioritized shortlist instead of enumerating the whole tree yourself:
 
    ```bash
-   .claude/skills/update-docs-screenshots/scripts/list-stale-candidates.sh "$VERSION" "$DOCS"
+   .claude/skills/update-docs-screenshots/scripts/list-stale-candidates.sh "$VERSION" "$DOCS" 20 "$FORK_OWNER"
    ```
+
+   It leaves out images a reviewer has already turned down: everything in `skip-images.txt`, plus
+   every image touched by one of `$FORK_OWNER`'s closed-unmerged screenshot PRs
+   (`scripts/list-rejected-images.sh`, ~10s of REST calls). Without that, a rejected
+   old-version-marked image sits at the top of the list forever — `sensitive-data-user-group-v8.png`
+   was re-captured and abandoned in four consecutive routine runs. If the PR lookup fails, the
+   script warns and falls back to the skip file only.
 
    It prioritizes images whose filename carries an **old** version marker (`v1`–`v13` — the
    highest-hit-rate signal for staleness found by testing against the real repo), falls back to
