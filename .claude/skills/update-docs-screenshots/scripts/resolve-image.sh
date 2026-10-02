@@ -59,7 +59,7 @@ case "$VERSION" in
 esac
 
 case "$REL" in
-  "$VERSION"/umbraco-cms/*) ;;
+  "$VERSION"/umbraco-cms/*|"$VERSION"/umbraco-forms/*) ;;
   *)
     echo "OUT OF SCOPE: '$REL' is not under <version>/umbraco-cms/ — cloud, Deploy, and add-on-product screens can't be captured locally." >&2
     exit 5

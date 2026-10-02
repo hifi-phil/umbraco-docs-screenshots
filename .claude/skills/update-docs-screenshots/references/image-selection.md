@@ -4,9 +4,7 @@ Targeted mode has no judgment call to document here — `scripts/resolve-image.s
 validates the supplied path deterministically (see SKILL.md Step 3).
 
 The discovery-fallback phase does need judgment — reading images and deciding whether they're
-outdated isn't scriptable — but **don't scan the whole tree**: `$DOCS/<version>/umbraco-cms/**`
-holds around 3,800 images combined across both majors, and reading anywhere near that many isn't
-feasible or necessary for a job that only needs to find **one** candidate per run.
+outdated isn't scriptable — but **don't scan the whole tree**: `$DOCS/<version>/umbraco-cms/**` and `$DOCS/<version>/umbraco-forms/**` holds around 3,800 images combined across both majors, and reading anywhere near that many isn't feasible or necessary for a job that only needs to find **one** candidate per run.
 
 1. Get a bounded, prioritized shortlist instead of enumerating the whole tree yourself:
 
@@ -32,14 +30,15 @@ feasible or necessary for a job that only needs to find **one** candidate per ru
 3. **Detect the outdated ones by the pre-v14 AngularJS signature:**
    - Circular Umbraco logo, top-left.
    - Horizontal coloured section tabs across the top (Content / Media / Settings / … as tabs).
-   - A `Forms` section tab.
    - Old grey tree styling and old workspace chrome.
    Any of these means the shot predates the Bellissima redesign and is outdated for v17/v18.
    (The current UI has a dark left rail of section icons, a light tree panel, and Lit web-component
    workspaces.)
 4. **Surface a single best candidate** — the image plus the article that uses it. Confirm it is
-   locally reproducible (a CMS backoffice screen, not a Cloud/Deploy dialog and not an add-on
-   product), then take it forward autonomously (SKILL.md's autonomy note applies here).
+   locally reproducible (a CMS or Forms backoffice screen — not a Cloud/Deploy dialog and not
+   any other add-on product), then take it forward autonomously (SKILL.md's autonomy note
+   applies here). Skip the Forms landing/dashboard page specifically — it shows a trial banner
+   on this demo instance that a real licensed install wouldn't have.
 5. Choose **one** candidate for this run and take only that one forward. This run ends when its PR is
    open (Step 10) — any other candidates are left for a future invocation. If none of the shortlist
    turned out to be a good candidate, re-run the script for a fresh shortlist (the random portion

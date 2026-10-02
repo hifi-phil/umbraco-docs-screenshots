@@ -46,7 +46,17 @@ fi
 
 cd "$DOCS/$VERSION/umbraco-cms" || exit 1
 
-ALL=$(find . \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) 2>/dev/null)
+# Scan both in-scope product areas. umbraco-forms is optional — older docs checkouts or a
+# harness without Forms installed simply won't have images there, so its absence isn't an error.
+ALL=""
+for AREA in umbraco-cms umbraco-forms; do
+  AREA_DIR="$DOCS/$VERSION/$AREA"
+  [ -d "$AREA_DIR" ] || continue
+  AREA_FILES=$(cd "$AREA_DIR" && find . \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) 2>/dev/null | sed "s#^\./#${AREA}/#")
+  ALL="$ALL
+$AREA_FILES"
+done
+ALL=$(echo "$ALL" | grep -v '^$')
 
 # Exclude anything already marked with the CURRENT version — treat as already refreshed.
 CANDIDATES=$(echo "$ALL" | grep -Eiv "(v${VERSION}|[-_]${VERSION})\.(png|jpe?g)\$")
@@ -57,4 +67,4 @@ UNMARKED=$(echo "$CANDIDATES" | grep -Eiv 'v(1[0-3]|[1-9])[^0-9]*\.(png|jpe?g)$'
 {
   echo "$OLD_MARKED"
   echo "$UNMARKED" | sort -R
-} | grep -v '^$' | sed "s#^\./#${VERSION}/umbraco-cms/#" | head -n "$LIMIT"
+} | grep -v '^$' | sed "s#^#${VERSION}/#" | head -n "$LIMIT"
