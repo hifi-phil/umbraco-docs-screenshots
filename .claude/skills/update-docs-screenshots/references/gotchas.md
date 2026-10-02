@@ -56,6 +56,21 @@
 
 ## Backoffice-driving gotchas (learned in real runs)
 
+- **The Forms Security tree has two layouts.** By default (`Umbraco:Forms:Options:ManageSecurityWithUserGroups`
+  is `false`) the **Security** group lists users directly. With it set to `true` it shows **Group
+  Security** and **User Security** folders instead. Match the original: a shot showing those folders
+  needs the setting turned on in that instance's `appsettings.Development.json` (and a restart)
+  before capture. Revert it afterwards — the demo instances stay on the default.
+- **The active Forms tree item shows its `•••` and `↵` actions.** That's how the current backoffice
+  marks the open item, not hover state — moving the mouse away doesn't remove them.
+- **Group and page captions in the Form Designer are input values.** `getByText('<group name>')`
+  never matches them; wait on a label such as `Add question` instead.
+- **A demo instance can stay alive but stop listening.** After a Claude Code restart (and sometimes
+  after a long session), `v17.exe`/`v18.exe` kept running with no port open, so
+  `ensure-instance-up.sh` started a new `dotnet run` whose build failed with `MSB3027 ... The file
+  is locked by: "v18 (<pid>)"`. Stop that PID (its path is under `demo/v1x/bin/`) and re-run the
+  script.
+
 - **Use native Playwright clicks for tree/router navigation — they are trusted.** A synthetic click
   from `page.evaluate(() => el.click())` is ignored by the SPA router and the tree, so nothing
   navigates. Use `page.getByRole('link'/'button', { name }).click()` instead. (Fine to *walk* the

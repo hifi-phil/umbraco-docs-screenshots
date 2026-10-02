@@ -29,14 +29,17 @@ if [ "$NEW_NAME" != "$OLD_NAME" ] && [ ! -e "$DOCS/$ASSETS/$NEW_NAME" ]; then
   git -C "$DOCS" rm --quiet "$ASSETS/$OLD_NAME"
   # Update markdown references in THIS version only — each major has its own copy of the asset, so
   # a repo-wide grep would also repoint 17/ articles at a file that only exists under 18/ (happened
-  # in three real runs). Portable (no GNU vs BSD sed difference):
-  for f in $(grep -rl "$OLD_NAME" --include='*.md' "$DOCS/$VERSION"); do
+  # in three real runs). Match `assets/<name>`, not the bare name: a bare `tree-v14.png` also matches
+  # inside `prevaluesourcetree-v14.png` and `contenttree-v14.png`, and would rewrite those references
+  # to files that don't exist. Portable (no GNU vs BSD sed difference):
+  for f in $(grep -rlF "assets/$OLD_NAME" --include='*.md' "$DOCS/$VERSION"); do
     node -e "
       const fs = require('fs');
       const [file, oldName, newName] = process.argv.slice(1);
-      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').split(oldName).join(newName));
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').split('assets/' + oldName).join('assets/' + newName));
     " "$f" "$OLD_NAME" "$NEW_NAME"
   done
+  git -C "$DOCS" diff --stat   # check: only the article(s) that really use this image should be listed
   git -C "$DOCS" add -A "$VERSION"   # picks up the renamed asset + every edited .md file
 else
   cp "$HARNESS/screenshots/<name>.png" "$DOCS/$ASSETS/$OLD_NAME"
@@ -55,8 +58,13 @@ collide with an existing file.
 git -C "$DOCS" commit -m "Update <article> backoffice screenshot for v<version>"
 git -C "$DOCS" push -u origin update-screenshot-<name>   # origin = the fork ($FORK_OWNER)
 gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" \
-  --title "[AI] Update <article> backoffice screenshot" --body "Refreshed outdated pre-v14 screenshot for v<version>."
+  --title "[AI] Update <article> backoffice screenshot" --body "Refreshed outdated pre-v14 screenshot for v<version>." \
+  --label ai-screenshot
 ```
+
+Every screenshot PR gets the **`ai-screenshot`** label (it already exists on `umbraco/UmbracoDocs`)
+so reviewers can filter for them. If `gh pr create` fails on the label (e.g. no triage rights),
+open the PR without it and say so in the run report rather than failing the run.
 
 Everything above (`git checkout`/`add`/`commit`/`push`) works the same whether or not `gh` is
 installed — only the final PR-creation call needs a fallback. See `references/github-fallback.md`
@@ -84,8 +92,9 @@ it to `skip-images.txt` in the run report.
 ## Notes
 
 - The branch lives on the fork (`origin`); the PR is opened against upstream `umbraco/UmbracoDocs`,
-  base branch `main`. Open it **ready for review, not draft** (team preference), and always prefix
-  the title with **`[AI]`** so reviewers can tell it was machine-generated at a glance.
+  base branch `main`. Open it **ready for review, not draft** (team preference), always prefix
+  the title with **`[AI]`**, and add the **`ai-screenshot`** label, so reviewers can tell it was
+  machine-generated at a glance.
 - If the filename wasn't renamed, only an image changed and Vale has nothing to lint. **If it was
   renamed**, markdown files changed too — run `vale <changed.md>` on each and fix any errors before
   pushing.
