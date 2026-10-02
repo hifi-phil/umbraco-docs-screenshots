@@ -190,6 +190,14 @@ listening on:` appears or it times out (default 90s — pass a third argument to
 `SQLite Error 14: unable to open database file` lines on first boot are expected and already handled
 by the script; a nonzero exit means it genuinely timed out — check the log.
 
+Make sure the harness's npm dependencies are installed too. A cloud/routine run starts from a
+fresh clone with no `node_modules`, and the environment setup script can't install them because
+it can't rely on the repo being there yet:
+
+```bash
+[ -d "$HARNESS/node_modules" ] || npm ci --prefix "$HARNESS" --no-audit --no-fund
+```
+
 ## Step 5 — Understand what the image depicts
 
 Find where the image is used and what screen/state it shows, so you know where to navigate. In
