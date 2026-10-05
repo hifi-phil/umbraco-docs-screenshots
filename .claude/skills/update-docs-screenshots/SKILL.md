@@ -164,8 +164,9 @@ instance in Step 4. Follow **one** of the three branches, never more than one:
      forward — **do not also run the discovery scan in the same run.**
   2. **Discovery-fallback phase (only if phase 1 found nothing to do):** pick a version to scan
      first — `$VERSION` isn't known yet the way it is in targeted mode. Default to whichever demo
-     instance is already listening (`lsof -nP -iTCP:44322/-iTCP:44327 -sTCP:LISTEN`); if neither is
-     up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14 AngularJS
+     instance already answers (`curl -sk -o /dev/null -w '%{http_code}' https://localhost:44322/umbraco`
+     / `:44327` — anything but `000`; not `lsof`, which Git Bash on Windows doesn't have); if neither
+     is up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14 AngularJS
      signature and surface one candidate — see `references/image-selection.md` for the
      bounded-shortlist script and the detection heuristic. The shortlist already leaves out images
      a reviewer has turned down (`skip-images.txt` plus closed-unmerged screenshot PRs), so don't

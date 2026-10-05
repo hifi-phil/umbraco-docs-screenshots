@@ -61,15 +61,26 @@
   Security** and **User Security** folders instead. Match the original: a shot showing those folders
   needs the setting turned on in that instance's `appsettings.Development.json` (and a restart)
   before capture. Revert it afterwards — the demo instances stay on the default.
+- **Fresh-install shots need a fresh database, not hidden DOM.** Screens like the Forms landing
+  page right after install show an empty state (`No items` on 17.6) that a seeded instance never
+  renders, so hiding seeded rows means guessing. Instead: stop the instance, copy
+  `demo/v1x/umbraco/Data/` to the scratchpad and verify the copy (`cmp` the `.sqlite.db*` files),
+  delete the live `Umbraco.sqlite.db*` and `TEMP/`, start it (unattended install + package
+  migrations take ~10s after `Now listening on:`), capture, then stop it and copy the backup back.
+  The restored DB keeps the seeded data and the MCP API user. Deleting the live DB needs the user's
+  explicit go-ahead; auto mode blocks it otherwise.
 - **The active Forms tree item shows its `•••` and `↵` actions.** That's how the current backoffice
   marks the open item, not hover state — moving the mouse away doesn't remove them.
 - **Group and page captions in the Form Designer are input values.** `getByText('<group name>')`
   never matches them; wait on a label such as `Add question` instead.
-- **A demo instance can stay alive but stop listening.** After a Claude Code restart (and sometimes
-  after a long session), `v17.exe`/`v18.exe` kept running with no port open, so
-  `ensure-instance-up.sh` started a new `dotnet run` whose build failed with `MSB3027 ... The file
-  is locked by: "v18 (<pid>)"`. Stop that PID (its path is under `demo/v1x/bin/`) and re-run the
-  script.
+- **`MSB3027 ... The file is locked by: "v18 (<pid>)"` on start means a second `dotnet run`.**
+  `ensure-instance-up.sh` used `lsof` to see whether the instance was already up; Git Bash on
+  Windows has no `lsof`, so it always concluded "not up" and launched a duplicate next to the
+  healthy instance, whose build failed on the locked exe and timed out. The script now checks with
+  `curl` (any HTTP answer = up) and only stops a process running this project's own
+  `demo/v1x/bin/.../v1x.exe` when nothing answers. If you see `MSB3027` anyway, check
+  `curl -sk https://localhost:<port>/umbraco` before stopping anything — the instance is probably
+  fine.
 
 - **Use native Playwright clicks for tree/router navigation — they are trusted.** A synthetic click
   from `page.evaluate(() => el.click())` is ignored by the SPA router and the tree, so nothing
