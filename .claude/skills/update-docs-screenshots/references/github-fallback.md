@@ -26,6 +26,15 @@ substitute 1, "any", or "at least one"; a handful of open PRs awaiting review is
 (Tool name per the current `github-ops` skill; confirm against the live `mcp__github__*` list if it
 doesn't match.)
 
+## Step 3 — the rejected-image list (discovery fallback)
+
+`scripts/list-stale-candidates.sh` warns `couldn't list rejected-PR images` when
+`scripts/list-rejected-images.sh` fails (no `gh`, or it isn't authenticated). Rebuild the list by
+hand: call `mcp__github__search_pull_requests` with
+`repo:umbraco/UmbracoDocs is:pr is:closed is:unmerged author:<FORK_OWNER> screenshot in:title`,
+then list each result's files (`mcp__github__pull_request_read` with method `get_files`, or `mcp__github__get_pull_request_files` on older servers) and collect the basenames of
+every image (and any `previous_filename`). Treat those exactly like `skip-images.txt` entries.
+
 ## Step 9 — creating the PR
 
 `gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --title "[AI] ..." --body "..."`

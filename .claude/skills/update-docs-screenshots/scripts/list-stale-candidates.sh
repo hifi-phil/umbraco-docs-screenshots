@@ -3,7 +3,8 @@
 #
 # Usage: list-stale-candidates.sh <17|18> <docs-root> [limit] [fork-owner]
 #
-# Always excludes basenames in ../skip-images.txt. With [fork-owner], also excludes images from
+# Always excludes basenames in ../skip-images.txt and in open skip-images-* PRs on the harness
+# repo (scripts/list-pending-skips.sh). With [fork-owner], also excludes images from
 # that fork's closed-unmerged screenshot PRs (scripts/list-rejected-images.sh); if that lookup
 # fails it warns on stderr and carries on with only the skip file.
 #
@@ -14,6 +15,8 @@
 #   1. Images whose filename carries an OLD version marker (v1–v13) — the highest-hit-rate signal
 #      for staleness found by testing against the real repo (e.g. Content-Picker2-DataType-v10.png,
 #      query-builder-v9.png are genuinely untouched since 2023 despite unrelated recent commits).
+#      Shuffled too: in a fixed order every run opened the same handful of dead ends
+#      (Typeahead-v8, v7-content, User_Type_v13, …) and ended without a PR.
 #   2. Everything else (no version marker at all — ~88% of all images), in random order so
 #      repeated runs sample different parts of this bulk pool rather than always hitting the same
 #      alphabetically-first files.
@@ -68,6 +71,9 @@ CANDIDATES=$(echo "$ALL" | grep -Eiv "(v${VERSION}|[-_]${VERSION})\.(png|jpe?g)\
 # Exclude images a reviewer has already turned down: the hand-kept skip file, plus (if a fork
 # owner was given) every image from a closed-unmerged screenshot PR.
 SKIP=$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$SCRIPT_DIR/../skip-images.txt" 2>/dev/null)
+# Dead ends proposed by earlier runs and still awaiting review (scripts/propose-skip-entries.sh).
+SKIP="$SKIP
+$("$SCRIPT_DIR/list-pending-skips.sh" "$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)")"
 if [ -n "$FORK_OWNER" ]; then
   if REJECTED=$("$SCRIPT_DIR/list-rejected-images.sh" "$FORK_OWNER"); then
     SKIP="$SKIP
@@ -85,6 +91,6 @@ OLD_MARKED=$(echo "$CANDIDATES" | grep -Ei 'v(1[0-3]|[1-9])[^0-9]*\.(png|jpe?g)$
 UNMARKED=$(echo "$CANDIDATES" | grep -Eiv 'v(1[0-3]|[1-9])[^0-9]*\.(png|jpe?g)$')
 
 {
-  echo "$OLD_MARKED"
+  echo "$OLD_MARKED" | sort -R
   echo "$UNMARKED" | sort -R
 } | grep -v '^$' | sed "s#^#${VERSION}/#" | head -n "$LIMIT"
