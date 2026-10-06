@@ -26,8 +26,14 @@ if [ -z "$FORK_OWNER" ]; then
 fi
 command -v gh >/dev/null 2>&1 || { echo "gh CLI not found" >&2; exit 3; }
 
-Q="repo:umbraco/UmbracoDocs is:pr is:closed is:unmerged author:$FORK_OWNER screenshot in:title"
-PRS=$(gh api -X GET search/issues -f q="$Q" -f per_page=100 --jq '.items[].number') || exit 4
+# Two searches, unioned: the ai-screenshot label catches every PR since Step 9 started adding it,
+# whoever opened it; the author search keeps older, unlabelled PRs. Author alone missed PRs opened
+# from a personal account when <fork-owner> resolves to `umbraco` (docs origin = upstream itself).
+Q_LABEL="repo:umbraco/UmbracoDocs is:pr is:closed is:unmerged label:ai-screenshot"
+Q_AUTHOR="repo:umbraco/UmbracoDocs is:pr is:closed is:unmerged author:$FORK_OWNER screenshot in:title"
+PRS_LABEL=$(gh api -X GET search/issues -f q="$Q_LABEL" -f per_page=100 --jq '.items[].number') || exit 4
+PRS_AUTHOR=$(gh api -X GET search/issues -f q="$Q_AUTHOR" -f per_page=100 --jq '.items[].number') || exit 4
+PRS=$(printf '%s\n%s\n' "$PRS_LABEL" "$PRS_AUTHOR" | grep -E '^[0-9]+$' | sort -un)
 
 for N in $PRS; do
   gh api --paginate "repos/umbraco/UmbracoDocs/pulls/$N/files?per_page=100" \

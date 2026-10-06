@@ -19,7 +19,11 @@
 # locally and in the cloud.
 #
 # Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 9 — keep
-# that prefix in sync with tests/PR-creation code so this guard keeps working.
+# that prefix in sync with tests/PR-creation code so this guard keeps working — plus either the
+# `ai-screenshot` label (every PR gets it since Step 9 started adding it) or an author matching
+# <fork-owner> (for older, unlabelled PRs). Author alone missed real PRs: when the docs `origin` is
+# umbraco/UmbracoDocs itself, <fork-owner> resolves to `umbraco`, but the PRs are authored by the
+# person who opened them, so the guard counted 0 with four screenshot PRs open.
 
 set -u
 
@@ -43,9 +47,10 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 3
 fi
 
-# Open PRs on upstream whose head is a fork-owned update-screenshot-* branch. --paginate applies
-# --jq per page, so emit one line per match and count lines rather than summing per-page lengths.
-JQ=".[] | select(.user.login == \"$FORK_OWNER\" and (.head.ref | startswith(\"update-screenshot-\"))) | \"  #\\(.number)  \\(.html_url)\""
+# Open PRs on upstream with an update-screenshot-* head branch that are labelled ai-screenshot or
+# authored by <fork-owner>. --paginate applies --jq per page, so emit one line per match and count
+# lines rather than summing per-page lengths.
+JQ=".[] | select((.head.ref | startswith(\"update-screenshot-\")) and (any(.labels[]?; .name == \"ai-screenshot\") or .user.login == \"$FORK_OWNER\")) | \"  #\\(.number)  \\(.html_url)\""
 if ! MATCHES=$(gh api --paginate "repos/umbraco/UmbracoDocs/pulls?state=open&per_page=100" --jq "$JQ"); then
   echo "gh api call failed — use the mcp__github__* fallback (references/github-fallback.md) instead." >&2
   exit 4

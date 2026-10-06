@@ -13,9 +13,11 @@ Code cloud sessions (`403 GitHub GraphQL is not available from Claude Code sessi
 loudly with exit `3` if `gh` isn't installed and `4` if the API call fails, instead of silently
 reporting zero open PRs and bypassing the guard.
 
-**Exit `3` or `4`:** call `mcp__github__search_pull_requests` with the query
-`repo:umbraco/UmbracoDocs is:pr is:open author:<FORK_OWNER>`, filter the results yourself for a
-head branch starting with `update-screenshot-`, and count them. Apply the exact same exit-code
+**Exit `3` or `4`:** call `mcp__github__search_pull_requests` twice, with
+`repo:umbraco/UmbracoDocs is:pr is:open label:ai-screenshot` and
+`repo:umbraco/UmbracoDocs is:pr is:open author:<FORK_OWNER>` (the label catches PRs opened from
+any account; the author query keeps older unlabelled ones). Merge the two result sets by PR number,
+filter for a head branch starting with `update-screenshot-`, and count them. Apply the exact same exit-code
 logic the script documents, **against the same limit: 8** (the script's default `MAX_OPEN` — do not
 substitute 1, "any", or "at least one"; a handful of open PRs awaiting review is normal):
 
@@ -37,11 +39,13 @@ every image (and any `previous_filename`). Treat those exactly like `skip-images
 
 ## Step 9 — creating the PR
 
-`gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --title "[AI] ..." --body "..."`
+`gh pr create --repo umbraco/UmbracoDocs --base main --head "$FORK_OWNER:update-screenshot-<name>" --title "[AI] ..." --body "..." --label ai-screenshot`
 is the `gh`-CLI path (see `references/publish-pr.md` for the full command in context — note there's
 no `--draft` flag: these open ready for review, per team preference).
 
 **No `gh`:** use `mcp__github__create_pull_request` with the same `base`/`head`/`body` values, the
 `title` prefixed with `[AI] ` the same way, and `draft: false` (or the field omitted, if the tool
-defaults to non-draft). Everything before it (`git checkout`/`add`/`commit`/`push`) works
-identically either way — only this final call needs the fallback.
+defaults to non-draft). That tool can't set labels, so follow it with `mcp__github__update_issue`
+on the new PR number with `labels: ["ai-screenshot"]` (a PR is an issue for labelling purposes).
+Everything before it (`git checkout`/`add`/`commit`/`push`) works identically either way — only
+these final calls need the fallback.

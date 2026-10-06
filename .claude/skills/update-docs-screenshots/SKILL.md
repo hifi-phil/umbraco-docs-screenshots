@@ -133,8 +133,9 @@ The script gives the open count (and, if any are open, their PR numbers/URLs) an
   would otherwise have been picked from the queue, this is a silent stop (no message was chosen yet,
   so there's no thread to reply to).
 
-Screenshot PRs are identified by the `update-screenshot-*` branch prefix used in Step 9 — keep that
-prefix so this guard keeps working.
+Screenshot PRs are identified by the `update-screenshot-*` branch prefix and the `ai-screenshot`
+label used in Step 9 — keep both so this guard keeps working (older unlabelled PRs still count by
+author).
 
 ## Step 3 — Choose the image for this run
 
@@ -163,8 +164,9 @@ instance in Step 4. Follow **one** of the three branches, never more than one:
      forward — **do not also run the discovery scan in the same run.**
   2. **Discovery-fallback phase (only if phase 1 found nothing to do):** pick a version to scan
      first — `$VERSION` isn't known yet the way it is in targeted mode. Default to whichever demo
-     instance is already listening (`lsof -nP -iTCP:44322/-iTCP:44327 -sTCP:LISTEN`); if neither is
-     up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14 AngularJS
+     instance already answers (`curl -sk -o /dev/null -w '%{http_code}' https://localhost:44322/umbraco`
+     / `:44327` — anything but `000`; not `lsof`, which Git Bash on Windows doesn't have); if neither
+     is up, default to `18`. Then scan `$DOCS/$VERSION/umbraco-cms/**` for the pre-v14 AngularJS
      signature and surface one candidate — see `references/image-selection.md` for the
      bounded-shortlist script and the detection heuristic. The shortlist already leaves out images
      a reviewer has turned down (`skip-images.txt` plus closed-unmerged screenshot PRs), so don't
@@ -248,8 +250,8 @@ On a feature branch in the **docs repo**, replace the asset, push, and open the 
 `umbraco/UmbracoDocs` — full commands, the filename-renaming check (a stale version marker like
 `-v9` gets stripped and every markdown reference updated to match), and the `gh`/MCP fallback are
 all in `references/publish-pr.md`. Three things worth knowing before you open it: the title is
-always prefixed **`[AI]`** so reviewers can spot it's machine-generated, the PR is opened **ready
-for review** (not draft — per team preference), and **a Slack-sourced run must reply in-thread with
+always prefixed **`[AI]`** and the PR gets the **`ai-screenshot`** label so reviewers can spot it's
+machine-generated, the PR is opened **ready for review** (not draft — per team preference), and **a Slack-sourced run must reply in-thread with
 the PR URL right away** — don't wait for Step 10.
 
 ## Step 10 — Clean up temp artifacts, then stop (one PR per run)

@@ -13,7 +13,8 @@ outdated isn't scriptable — but **don't scan the whole tree**: `$DOCS/<version
    ```
 
    It leaves out images a reviewer has already turned down: everything in `skip-images.txt`, plus
-   every image touched by one of `$FORK_OWNER`'s closed-unmerged screenshot PRs
+   every image touched by a closed-unmerged screenshot PR (labelled `ai-screenshot`, or authored by
+   `$FORK_OWNER` for older unlabelled ones)
    (`scripts/list-rejected-images.sh`, ~10s of REST calls). Without that, a rejected
    old-version-marked image sits at the top of the list forever — `sensitive-data-user-group-v8.png`
    was re-captured and abandoned in four consecutive routine runs.
