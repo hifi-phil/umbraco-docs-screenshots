@@ -170,7 +170,8 @@ instance in Step 4. Follow **one** of the three branches, never more than one:
      a reviewer has turned down (`skip-images.txt` plus closed-unmerged screenshot PRs), so don't
      add those back. Take the best candidate forward
      autonomously (per the note above). If it dies before a PR is open, move on to the next one —
-     up to 5 attempted candidates per run — and list every dead end in the run summary
+     up to 5 attempted candidates per run — and record every lasting dead end with
+     `scripts/propose-skip-entries.sh`, which opens a skip-list PR on this repo
      (`references/image-selection.md` has both rules).
 - **Slack (explicit)** mode (invoked as `slack:#channel-name`): same algorithm as the Slack-check
   phase above, against the **named** channel instead, with **no discovery fallback** — an empty
@@ -273,6 +274,11 @@ git -C "$HARNESS" status --short   # confirm truly clean before reporting done
 
 Use `git -C`, never `cd … && git …` — the latter raises a permission prompt that stalls an
 unattended run (see `references/gotchas.md`).
+
+If discovery rejected any candidates for a lasting reason, open the skip-list PR now
+(`scripts/propose-skip-entries.sh`, `references/image-selection.md` step 7) — it's the one change
+to the harness repo a run makes, and it goes through its own branch and worktree, never this
+checkout.
 
 Then **the run is complete** (per the one-PR-per-run rule at the top of this file — once a PR is
 open, do not loop back to Step 3, in either phase). Report the PR (and preview link) and stop. **Any Slack-sourced run:**

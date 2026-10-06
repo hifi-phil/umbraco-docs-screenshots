@@ -61,7 +61,24 @@ outdated isn't scriptable — but **don't scan the whole tree**: `$DOCS/<version
    (re-run the script for a fresh shortlist if it runs out — both tiers reshuffle). Rejecting a
    candidate just by looking at it is cheap and doesn't count toward the 5; only candidates you
    started navigating/capturing do.
-7. **Report every dead end.** Runs can't commit to this repo, so a "never pick this" verdict is lost
-   unless a person adds it to `skip-images.txt`. List each rejected candidate with a one-line reason
-   in the run summary and the push notification, formatted as ready-to-paste skip-file lines
-   (`<basename>   # <reason>`).
+7. **Record every dead end with a PR on the harness repo.** Runs can't commit to this repo's
+   checkout, so before ending — whether or not this run opened a docs PR — pass each candidate you
+   rejected for a lasting reason to:
+
+   ```bash
+   .claude/skills/update-docs-screenshots/scripts/propose-skip-entries.sh "$HARNESS" \
+     "Typeahead-v8.png|v18 Tags editor shows no suggestion dropdown" \
+     "User_Type_v13.png|Google Cloud console screen, not the backoffice"
+   ```
+
+   It opens one `[AI] Skip discovery dead ends` PR adding those lines to `skip-images.txt`, using a
+   throwaway worktree outside the repo (your checkout stays clean), and drops anything already
+   skipped or pending in another open skip PR. Open skip PRs take effect immediately —
+   `list-stale-candidates.sh` excludes their entries until a reviewer merges or closes them.
+   Exit `3`/`4` means the branch was pushed but the PR call failed: open it with
+   `mcp__github__create_pull_request` (head = the branch on stderr, base `main`, same title).
+
+   **Only lasting verdicts belong here** — not a screen, not reproducible on a vanilla CMS, a
+   deliberately old shot, already current UI. A transient failure (timeout, selector you couldn't
+   find, instance trouble) is not a dead end; leave it for a future run. Include the PR URL in the
+   run summary and push notification.

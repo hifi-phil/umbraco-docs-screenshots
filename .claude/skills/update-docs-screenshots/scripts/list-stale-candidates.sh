@@ -3,7 +3,8 @@
 #
 # Usage: list-stale-candidates.sh <17|18> <docs-root> [limit] [fork-owner]
 #
-# Always excludes basenames in ../skip-images.txt. With [fork-owner], also excludes images from
+# Always excludes basenames in ../skip-images.txt and in open skip-images-* PRs on the harness
+# repo (scripts/list-pending-skips.sh). With [fork-owner], also excludes images from
 # that fork's closed-unmerged screenshot PRs (scripts/list-rejected-images.sh); if that lookup
 # fails it warns on stderr and carries on with only the skip file.
 #
@@ -70,6 +71,9 @@ CANDIDATES=$(echo "$ALL" | grep -Eiv "(v${VERSION}|[-_]${VERSION})\.(png|jpe?g)\
 # Exclude images a reviewer has already turned down: the hand-kept skip file, plus (if a fork
 # owner was given) every image from a closed-unmerged screenshot PR.
 SKIP=$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' -e '/^$/d' "$SCRIPT_DIR/../skip-images.txt" 2>/dev/null)
+# Dead ends proposed by earlier runs and still awaiting review (scripts/propose-skip-entries.sh).
+SKIP="$SKIP
+$("$SCRIPT_DIR/list-pending-skips.sh" "$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)")"
 if [ -n "$FORK_OWNER" ]; then
   if REJECTED=$("$SCRIPT_DIR/list-rejected-images.sh" "$FORK_OWNER"); then
     SKIP="$SKIP
