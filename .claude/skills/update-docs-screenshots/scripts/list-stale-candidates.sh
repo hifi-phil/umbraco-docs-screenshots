@@ -14,6 +14,8 @@
 #   1. Images whose filename carries an OLD version marker (v1–v13) — the highest-hit-rate signal
 #      for staleness found by testing against the real repo (e.g. Content-Picker2-DataType-v10.png,
 #      query-builder-v9.png are genuinely untouched since 2023 despite unrelated recent commits).
+#      Shuffled too: in a fixed order every run opened the same handful of dead ends
+#      (Typeahead-v8, v7-content, User_Type_v13, …) and ended without a PR.
 #   2. Everything else (no version marker at all — ~88% of all images), in random order so
 #      repeated runs sample different parts of this bulk pool rather than always hitting the same
 #      alphabetically-first files.
@@ -85,6 +87,6 @@ OLD_MARKED=$(echo "$CANDIDATES" | grep -Ei 'v(1[0-3]|[1-9])[^0-9]*\.(png|jpe?g)$
 UNMARKED=$(echo "$CANDIDATES" | grep -Eiv 'v(1[0-3]|[1-9])[^0-9]*\.(png|jpe?g)$')
 
 {
-  echo "$OLD_MARKED"
+  echo "$OLD_MARKED" | sort -R
   echo "$UNMARKED" | sort -R
 } | grep -v '^$' | sed "s#^#${VERSION}/#" | head -n "$LIMIT"

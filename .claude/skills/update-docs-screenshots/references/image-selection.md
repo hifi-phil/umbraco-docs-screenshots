@@ -16,15 +16,21 @@ outdated isn't scriptable — but **don't scan the whole tree**: `$DOCS/<version
    every image touched by one of `$FORK_OWNER`'s closed-unmerged screenshot PRs
    (`scripts/list-rejected-images.sh`, ~10s of REST calls). Without that, a rejected
    old-version-marked image sits at the top of the list forever — `sensitive-data-user-group-v8.png`
-   was re-captured and abandoned in four consecutive routine runs. If the PR lookup fails, the
-   script warns and falls back to the skip file only.
+   was re-captured and abandoned in four consecutive routine runs.
+
+   **If it prints `WARN: couldn't list rejected-PR images`, don't carry on with that shortlist** —
+   it can contain already-rejected images (a cloud run re-picked `cropping-images-v9.png` this way
+   and lost the whole capture to the existing branch). Rebuild the rejected list by hand per
+   `references/github-fallback.md` and drop those basenames from the shortlist before reading any
+   images.
 
    It prioritizes images whose filename carries an **old** version marker (`v1`–`v13` — the
    highest-hit-rate signal for staleness found by testing against the real repo), falls back to
    the large unmarked bulk pool in random order (so repeated runs sample different parts of it
    instead of always hitting the same files), and excludes images already marked with the
    **current** version (`v17`/`v18` as appropriate) since those are almost always already
-   refreshed. Capped to 20 paths by default — pass a third argument to change that.
+   refreshed. Both tiers are shuffled, so repeated runs see different candidates. Capped to 20
+   paths by default — pass a third argument to change that.
 
    Git commit dates were tried first and rejected as a prioritization signal: a file's last-commit
    date often reflects an unrelated bulk restructuring or GitBook-sync commit, not a real content
@@ -47,6 +53,15 @@ outdated isn't scriptable — but **don't scan the whole tree**: `$DOCS/<version
    applies here). Skip the Forms landing/dashboard page specifically — it shows a trial banner
    on this demo instance that a real licensed install wouldn't have.
 5. Choose **one** candidate for this run and take only that one forward. This run ends when its PR is
-   open (Step 10) — any other candidates are left for a future invocation. If none of the shortlist
-   turned out to be a good candidate, re-run the script for a fresh shortlist (the random portion
-   reshuffles) rather than falling back to an unbounded scan.
+   open (Step 10) — any other candidates are left for a future invocation.
+6. **One PR per run is not one attempt per run.** If a candidate dies before a PR is open — it isn't
+   stale, isn't reproducible locally, its `update-screenshot-*` branch already exists, or the capture
+   can't match — abandon it (`scripts/abandon-candidate.sh` if a branch was made) and move to the
+   next shortlist entry. Keep going until a PR is open or you have **tried 5 candidates**
+   (re-run the script for a fresh shortlist if it runs out — both tiers reshuffle). Rejecting a
+   candidate just by looking at it is cheap and doesn't count toward the 5; only candidates you
+   started navigating/capturing do.
+7. **Report every dead end.** Runs can't commit to this repo, so a "never pick this" verdict is lost
+   unless a person adds it to `skip-images.txt`. List each rejected candidate with a one-line reason
+   in the run summary and the push notification, formatted as ready-to-paste skip-file lines
+   (`<basename>   # <reason>`).

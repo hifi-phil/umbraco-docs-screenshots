@@ -5,3 +5,9 @@
 # Targeted and Slack-sourced runs ignore it — a person asking for an image explicitly wins.
 
 sensitive-data-user-group-v8.png   # umbraco/UmbracoDocs#8353 — "Don't update this screenshot" (4 closed attempts)
+cropping-images-v9.png             # umbraco/UmbracoDocs#8305, #8395 closed unmerged; a cloud run re-picked it 06-10-2026 when the rejected-PR lookup failed
+Delete-an-anchor-v11.png           # umbraco/UmbracoDocs#8317 closed unmerged; already shows near-current UI
+sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8.png (#8353)
+v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
+User_Type_v13.png                  # Google Cloud console screen, not the backoffice
+Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
