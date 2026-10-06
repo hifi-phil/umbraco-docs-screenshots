@@ -5,3 +5,5 @@
 # Targeted and Slack-sourced runs ignore it — a person asking for an image explicitly wins.
 
 sensitive-data-user-group-v8.png   # umbraco/UmbracoDocs#8353 — "Don't update this screenshot" (4 closed attempts)
+v7-content.png                     # test (discovery run 06-10-2026)
+User_Type_v13.png                  # test (discovery run 06-10-2026)
