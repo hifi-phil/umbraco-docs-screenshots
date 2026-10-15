@@ -11,3 +11,4 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+Formats-Button-v11.png             # Already near-current Tiptap Style Select dropdown (only label differs); same family as Delete-an-anchor-v11.png rejection (discovery run 15-10-2026)
