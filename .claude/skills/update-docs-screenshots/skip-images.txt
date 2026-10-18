@@ -11,3 +11,9 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+createAboutUs.PNG                  # v8Screenshots copy is an orphan; the article uses the already-refreshed assets/createAboutUs.PNG (PR #8612) (discovery run 18-10-2026)
+addproperty.PNG                    # v8Screenshots copy is not referenced by any article (discovery run 18-10-2026)
+createDoctype.PNG                  # v8Screenshots copy is not referenced by any article (discovery run 18-10-2026)
+addproperty_new.png                # v8Screenshots copy is not referenced by any article (discovery run 18-10-2026)
+figure-17-where-our-data-fields-go-v8.png # annotated frontend website screenshot, not the backoffice (discovery run 18-10-2026)
+Remove-link-v11.png                # 50x51 toolbar icon, not a screen (discovery run 18-10-2026)
