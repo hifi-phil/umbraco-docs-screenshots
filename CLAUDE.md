@@ -20,8 +20,13 @@ built from two parts:
 ├── CLAUDE.md                 # this file
 ├── package.json              # Playwright test project (repo root)
 ├── playwright.config.ts      # Playwright config (TypeScript, Chromium only)
+├── .mcp.json                 # shared CMS/Forms Developer MCP servers (secrets via env vars)
+├── scripts/
+│   ├── mcp-setup.mjs         # runner behind `npm run mcp:setup:v17|v18`
+│   └── test.mjs              # cross-platform runner behind `npm run test:v17|v18`
 ├── tests/
-│   └── backoffice-login.spec.ts   # helper-based login + screenshot
+│   ├── backoffice-login.spec.ts   # helper-based login + screenshot
+│   └── setup/mcp-api-user.spec.ts # creates the MCP API user (skipped unless MCP_SETUP=1)
 └── demo/
     ├── v17/                  # Umbraco 17 web project  (screenshot target)
     └── v18/                  # Umbraco 18 web project  (screenshot target)
@@ -68,6 +73,63 @@ you may see transient `SQLite Error 14: unable to open database file` lines befo
 DB is created — these are expected; wait for `Now listening on:`.
 
 ## Playwright (repo root)
+### Delivery APIs and MCP servers
+
+Both instances have the **Content Delivery API** and the **Forms Delivery API** enabled:
+
+- CMS: `Umbraco:CMS:DeliveryApi:Enabled: true` in `appsettings.Development.json` **and**
+  `.AddDeliveryApi()` in `Program.cs`. The setting alone isn't enough — without the builder call
+  every `/umbraco/delivery/api/v2/...` request returns 500 (`Unable to resolve service for type
+  'IRequestSegmentService'`).
+- Forms: `Umbraco:Forms:Options:EnableFormsApi: true`, plus `Umbraco:Forms:Security`
+  `EnableAntiForgeryTokenForFormsApi: false` and `FormsApiKey: local-demo-forms-api-key-1234567890`
+  (sent as the `Api-Key` header). A request without the key returns 403. Demo-only value, like the
+  admin login — never reuse it anywhere real.
+
+The **CMS Developer MCP** and **Forms Developer MCP** servers for each instance are defined in the
+committed **`.mcp.json`** (project scope), so everyone who opens the repo in Claude Code gets them:
+
+| Server | Package | Instance |
+|---|---|---|
+| `umbraco-cms-v17` | `@umbraco-cms/mcp-dev@lts-17` | https://localhost:44322 |
+| `umbraco-forms-v17` | `@umbraco-forms/mcp-dev@lts-17-beta` | https://localhost:44322 |
+| `umbraco-cms-v18` | `@umbraco-cms/mcp-dev@latest` | https://localhost:44327 |
+| `umbraco-forms-v18` | `@umbraco-forms/mcp-dev@latest` | https://localhost:44327 |
+
+The Forms servers set `DISABLE_MCP_CHAINING=true` (the CMS tools are already registered
+separately, so chaining would duplicate them as `cms--*`) and `UMBRACO_FORMS_API_KEY` to the key
+above. All servers set `NODE_TLS_REJECT_UNAUTHORIZED=0` for the self-signed certs.
+
+They authenticate as a dedicated **API user** — `mcp@admin.com`, Administrators group, client ID
+`umbraco-back-office-mcp`. The client secret is **not** in `.mcp.json`: it reads
+`${UMBRACO_MCP_V17_CLIENT_SECRET}` / `${UMBRACO_MCP_V18_CLIENT_SECRET}`, which each person keeps in
+their own gitignored `.claude/settings.local.json` (`env` block). **The API user lives in the SQLite
+DB, which is also gitignored**, so every machine (and every reset DB) needs its own user and secret.
+
+**First-time setup, per machine** (instances running — see "Run the CMS"):
+
+```bash
+npm run mcp:setup:v17   # creates/resets the API user on 44322, saves UMBRACO_MCP_V17_CLIENT_SECRET
+npm run mcp:setup:v18   # same for 44327 → UMBRACO_MCP_V18_CLIENT_SECRET
+```
+
+Then restart Claude Code, approve the four project MCP servers when prompted (or via `/mcp`), and
+run `claude mcp list` to check they're connected. Re-run the matching script after deleting a DB.
+
+`npm run mcp:setup:v1x` runs `tests/setup/mcp-api-user.spec.ts` through `scripts/mcp-setup.mjs`
+(a cross-platform runner — npm runs scripts under `cmd` on Windows, where a `URL=... cmd` prefix
+fails). The spec generates a random secret (or uses `MCP_CLIENT_SECRET` if set), creates the user or
+resets its client credentials, checks the secret with a `client_credentials` token request, and
+merges it into `.claude/settings.local.json`. It's skipped unless `MCP_SETUP=1`, so a plain
+`npx playwright test` never resets anyone's credentials. Resetting replaces the old secret, so an
+existing `settings.local.json` value for that instance stops working until it's rewritten — which
+the script does itself.
+
+A server with the same name in **local** scope (`claude mcp add --scope local`) overrides the
+project one. If you registered any of these by hand earlier, remove them with
+`claude mcp remove <name> --scope local` so the shared definition is used. Never put a client
+secret in a committed file.
+
 
 | | |
 |---|---|
@@ -152,7 +214,9 @@ npx playwright install firefox webkit   # add more browsers if needed
   project's `use.baseURL` — so `--project=umbraco-17`/`umbraco-18` alone does not set it. Always
   pass `URL=https://localhost:443xx` explicitly on the command line **and** navigate with
   **absolute URLs** in the spec (see `tests/compare-content-v18.spec.ts` or either capture
-  template) regardless of which project you select.
+  template) regardless of which project you select. `npm run test:v17`/`test:v18` set `URL` for
+  you through `scripts/test.mjs` (extra args pass through: `npm run test:v18 -- tests/x.spec.ts`),
+  and work on Windows, where npm runs scripts under `cmd` and a `URL=... cmd` prefix fails.
 - ⚠️ **`umbracoUi` helpers need `testIdAttribute: 'data-mark'` in `playwright.config.ts`.** They're
   built on Playwright's `getByTestId()`, but the backoffice's own convention is `data-mark`, not
   the `data-testid` Playwright defaults to — confirmed by dumping a live v18 dashboard's DOM: 0

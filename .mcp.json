@@ -1,0 +1,48 @@
+{
+  "mcpServers": {
+    "umbraco-cms-v17": {
+      "command": "npx",
+      "args": ["-y", "@umbraco-cms/mcp-dev@lts-17"],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0",
+        "UMBRACO_BASE_URL": "https://localhost:44322",
+        "UMBRACO_CLIENT_ID": "umbraco-back-office-mcp",
+        "UMBRACO_CLIENT_SECRET": "${UMBRACO_MCP_V17_CLIENT_SECRET}"
+      }
+    },
+    "umbraco-forms-v17": {
+      "command": "npx",
+      "args": ["-y", "@umbraco-forms/mcp-dev@lts-17-beta"],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0",
+        "UMBRACO_BASE_URL": "https://localhost:44322",
+        "UMBRACO_CLIENT_ID": "umbraco-back-office-mcp",
+        "UMBRACO_CLIENT_SECRET": "${UMBRACO_MCP_V17_CLIENT_SECRET}",
+        "UMBRACO_FORMS_API_KEY": "local-demo-forms-api-key-1234567890",
+        "DISABLE_MCP_CHAINING": "true"
+      }
+    },
+    "umbraco-cms-v18": {
+      "command": "npx",
+      "args": ["-y", "@umbraco-cms/mcp-dev@latest"],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0",
+        "UMBRACO_BASE_URL": "https://localhost:44327",
+        "UMBRACO_CLIENT_ID": "umbraco-back-office-mcp",
+        "UMBRACO_CLIENT_SECRET": "${UMBRACO_MCP_V18_CLIENT_SECRET}"
+      }
+    },
+    "umbraco-forms-v18": {
+      "command": "npx",
+      "args": ["-y", "@umbraco-forms/mcp-dev@latest"],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0",
+        "UMBRACO_BASE_URL": "https://localhost:44327",
+        "UMBRACO_CLIENT_ID": "umbraco-back-office-mcp",
+        "UMBRACO_CLIENT_SECRET": "${UMBRACO_MCP_V18_CLIENT_SECRET}",
+        "UMBRACO_FORMS_API_KEY": "local-demo-forms-api-key-1234567890",
+        "DISABLE_MCP_CHAINING": "true"
+      }
+    }
+  }
+}

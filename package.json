@@ -4,8 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test:v17": "URL=https://localhost:44322 playwright test --project=umbraco-17",
-    "test:v18": "URL=https://localhost:44327 playwright test --project=umbraco-18"
+    "test:v17": "node scripts/test.mjs 17",
+    "test:v18": "node scripts/test.mjs 18",
+    "mcp:setup:v17": "node scripts/mcp-setup.mjs 17",
+    "mcp:setup:v18": "node scripts/mcp-setup.mjs 18"
   },
   "keywords": [],
   "author": "",
