@@ -11,3 +11,10 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+visual-studio-version-v9.png       # Visual Studio screen, not the backoffice (discovery run 23-10-2026)
+OAuth_Client_Id_v13.png            # Google Cloud console screen, not the backoffice (discovery run 23-10-2026)
+manage-nuget-packages-v8.png       # Visual Studio NuGet UI, not the backoffice (discovery run 23-10-2026)
+flexible-load-balancing-v9.png     # Infrastructure diagram, not a backoffice screen (discovery run 23-10-2026)
+flexible-load-balancing-scheduler-v9.png # Infrastructure diagram, not a backoffice screen (discovery run 23-10-2026)
+file-structure-v10.png             # File explorer screenshot, not the backoffice (discovery run 23-10-2026)
+createGroup_new.png                # Orphaned image, not referenced by any v18 article (discovery run 23-10-2026)
