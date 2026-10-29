@@ -11,3 +11,14 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+Delete-folder.png                  # Already current v18 UI (Media tree context menu) (discovery run 29-10-2026)
+select-doc-type.png                # Already current v18 UI (discovery run 29-10-2026)
+add-property-groups.png            # Already current v18 UI (discovery run 29-10-2026)
+design-group.png                   # Already current v18 UI (discovery run 29-10-2026)
+homePage.png                       # Already current v18 UI (discovery run 29-10-2026)
+docTypeIcon.png                    # Already current v18 UI (discovery run 29-10-2026)
+prevalue-options-1.png             # Already current v18 UI (discovery run 29-10-2026)
+umbraco-media-article-media-type.png # Already current v18 UI (discovery run 29-10-2026)
+media-configure-media-list-collection.png # Already current v18 UI (discovery run 29-10-2026)
+create-a-homepage-content-node.png # Already current v18 UI (discovery run 29-10-2026)
+element-folder-permissions.png     # Already current v18 UI (discovery run 29-10-2026)
