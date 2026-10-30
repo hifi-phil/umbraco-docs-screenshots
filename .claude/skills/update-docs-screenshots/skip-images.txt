@@ -11,3 +11,5 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+v8-miniprofiler-view.png           # Frontend browser screenshot with Chrome chrome/MiniProfiler overlay, not a backoffice screen (discovery run 30-10-2026)
+v8-miniprofiler-sql-details.png    # MiniProfiler overlay on the frontend, not a backoffice screen (discovery run 30-10-2026)
