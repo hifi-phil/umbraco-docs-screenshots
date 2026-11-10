@@ -11,3 +11,6 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+createHomepage.PNG                 # Orphaned v8 image, not referenced by any article, nothing to capture against (discovery run 10-11-2026)
+Installer-v8.PNG                   # VS Code screenshot, not referenced by any article, not backoffice (discovery run 10-11-2026)
+NetcoreTemplate.png                # VS Code task-template picker, not a backoffice screen (discovery run 10-11-2026)
