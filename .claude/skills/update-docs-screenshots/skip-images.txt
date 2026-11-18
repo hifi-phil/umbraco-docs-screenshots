@@ -11,3 +11,5 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+create-package.png                 # v18 Packages > Created already shows the current UI; recapture is near-identical (discovery run 18-11-2026)
+relations.PNG                      # old AngularJS shot, but needs a custom 'Homesick' relation seeded via C# code, not reproducible on vanilla CMS (discovery run 18-11-2026)
