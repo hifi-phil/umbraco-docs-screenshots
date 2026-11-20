@@ -11,3 +11,17 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+list-view-enabled.png              # already current Bellissima UI (discovery run 20-11-2026)
+time-only-property-editor-config.png # already current Bellissima UI (discovery run 20-11-2026)
+backoffice-landing-page.png        # already current Bellissima UI (discovery run 20-11-2026)
+articles-created.png               # already current Bellissima UI (discovery run 20-11-2026)
+inherit-domain.png                 # already current Bellissima UI (discovery run 20-11-2026)
+allow-vary-by-culture.png          # already current Bellissima UI (discovery run 20-11-2026)
+link-to-page.png                   # already current Bellissima UI (discovery run 20-11-2026)
+language-content-tree.png          # already current Bellissima UI (discovery run 20-11-2026)
+welcome-eng.png                    # already current Bellissima UI (discovery run 20-11-2026)
+replace-bodytext-with-page-field.png # already current Bellissima UI (discovery run 20-11-2026)
+editor_bar_v14.png                 # annotated diagram, not a plain backoffice capture (discovery run 20-11-2026)
+menu.png                           # generic icon illustration, not a backoffice screen (discovery run 20-11-2026)
+ConfigureTask.png                  # VS Code screenshot, not the backoffice (discovery run 20-11-2026)
+unstyled-homepage-after-templateaddition.png # frontend website, not the backoffice (discovery run 20-11-2026)
