@@ -11,3 +11,9 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+Managing-User-Account-Access.png   # v18 users profile menu shot already shows current backoffice UI (discovery run 25-11-2026)
+Move-media-location.png            # already current backoffice UI (discovery run 25-11-2026)
+configure-public-access.png        # already current backoffice UI (discovery run 25-11-2026)
+Delete-single-page-warning-v14.png # already current backoffice UI (discovery run 25-11-2026)
+Embed-Button.png                   # already current backoffice UI (discovery run 25-11-2026)
+Inserting-Image-from-the-Media-Library.png # already current backoffice UI (discovery run 25-11-2026)
