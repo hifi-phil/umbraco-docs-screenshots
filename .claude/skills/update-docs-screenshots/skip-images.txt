@@ -11,3 +11,7 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+create-partial.png                 # v18 Partial Views Create dialog already matches current UI (top section tabs are the current v18 chrome) (discovery run 27-11-2026)
+create-site-in-iis.png             # Windows IIS Manager screen, not the backoffice (discovery run 27-11-2026)
+granular-user-permissions-ui.png   # Already current UI; small cropped fragment (discovery run 27-11-2026)
+delete-media-item.png              # Already current UI (v14+ style) (discovery run 27-11-2026)
