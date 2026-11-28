@@ -11,3 +11,11 @@ sensitive-data-hidden-v8.png       # same family as sensitive-data-user-group-v8
 v7-content.png                     # deliberately a v7 shot in the migrate-to-8 article
 User_Type_v13.png                  # Google Cloud console screen, not the backoffice
 Typeahead-v8.png                   # v18 run found no tag suggestion dropdown to reproduce — re-check by hand, remove this line if one exists
+webhook-section.png                # Already current Bellissima UI (Settings > Webhooks) (discovery run 28-11-2026)
+allow-template.png                 # Already current Bellissima UI (discovery run 28-11-2026)
+member-type-composition-setting.PNG # Already current Bellissima UI (discovery run 28-11-2026)
+layout-template.png                # Already current Bellissima UI (discovery run 28-11-2026)
+imageCropper-upload.png            # Already current UI; trivial crop of upload control (discovery run 28-11-2026)
+Create_dashboard_functionality_users_list.png # Custom dashboard sample, not reproducible on vanilla instance (discovery run 28-11-2026)
+Repeatable-Textstrings-DataType.png # Already current Bellissima UI (discovery run 28-11-2026)
+removing-content.png               # Already current Bellissima UI (discovery run 28-11-2026)
